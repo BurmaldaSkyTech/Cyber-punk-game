@@ -1,0 +1,7 @@
+model: ollama/coder32
+edit-format: whole
+auto-test: true
+test-cmd: python -m pytest -q
+map-tokens: 4096
+attribute-author: false
+attribute-committer: false

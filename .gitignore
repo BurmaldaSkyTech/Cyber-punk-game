@@ -1,0 +1,8 @@
+.venv/
+data/
+index/
+__pycache__/
+*.pyc
+.pytest_cache/
+.aider.tags.cache.v3/
+*.bak
