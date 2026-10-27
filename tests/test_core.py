@@ -73,7 +73,15 @@ def test_unwrap_dv():
 
 def test_clean_cjk():
     from backend.common import clean
-    assert clean("privet 掩码 mir") == "privet mir"
+    # Проверяем только удаление CJK (китайские иероглифы)
+    assert clean("привет 掩码 мир") == "привет мир"
+
+
+def test_clean_latin():
+    from backend.common import clean
+    # Проверяем удаление латинских слов из русского текста
+    assert clean("привет hello мир") == "привет мир"
+    assert clean("пластины armorjack искры") == "пластины искры"
 
 
 def test_no_mojibake_in_chunks():
