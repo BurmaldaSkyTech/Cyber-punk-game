@@ -132,6 +132,13 @@ def consequences(mech):
                 cons.append(f"- попадание по {m.get('target')}: сквозь броню {m.get('net_damage')}"
                             + (", КРИТ-ТРАВМА (+5 мимо брони)" if m.get("critical_injury") else "")
                             + f", у цели HP {m.get('target_hp')} ({m.get('target_wound')})")
+        r = mech.get("npc_reaction")
+    if r:
+        if r["success"]:
+            cons.append(f"- {r['npc']} КОНТРАТАКУЕТ: урон {r['damage']} - "
+                        f"SP{r.get('armor_sp', 0)} = {r['net_damage']} по игроку")
+        else:
+            cons.append(f"- {r['npc']} контратакует и промахивается ({r['total']} vs DV{r['dv']})")                        
     return "\n".join(cons) or "- урон не наносился"
 
 
@@ -180,7 +187,10 @@ def act(sid: str, req: ActionIn):
     for m in [mech] + ([mech["second"]] if isinstance(mech.get("second"), dict) else []):
         if m.get("target_id"):
             st["threat"] = m["target_id"]
-
+    
+    reaction = engine.resolve_npc_reaction(st, actor, mech)
+    if reaction:
+        mech["npc_reaction"] = reaction          
     outcome = "УСПЕХ" if mech["success"] else "ПРОВАЛ"
     facts = json.dumps(mech, ensure_ascii=False)
     cons = consequences(mech)
@@ -229,7 +239,7 @@ def act(sid: str, req: ActionIn):
     st["log"].append({"player": req.player, "text": req.text, "mech": mech,
                       "narration": narration})
     turn_no = len(st["log"]) - 1
-    db.log_turn(sid, turn_no, req.player, req.text, judge, mech, narration)
+    db.log_turn(sid, turn_no, req.player, req.text, judge, mech, narration)    turn_id = db.log_turn(sid, turn_no, req.player, req.text, judge, mech, narration)
     st["turn"] = (st["turn"] + 1) % len(st["order"])
 
     for p in st["players"]:
@@ -249,4 +259,7 @@ def rate_turn(sid: str, tid: int, req: RateIn):
     if not (1 <= req.rating <= 5):
         raise HTTPException(400, "Rating must be 1-5")
     db.rate_turn(tid, req.rating, req.edited)
-    return {"ok": True, "turn_id": tid, "rating": req.rating}
+    return {"ok": True, "turn_id": tid, "rating": req.rating}    return {"mechanics": mech, "assist": assist, "narration": narration,
+            "questions": questions, "choices": choices,
+            "turn_no": turn_no, "turn_id": turn_id,
+            "next_player": st["order"][st["turn"]], "state": st}

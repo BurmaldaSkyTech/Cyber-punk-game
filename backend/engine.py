@@ -145,3 +145,49 @@ def resolve_assist(state, helper, dv, stat_key, skill_key):
         return {"helper": helper["name"], "bonus": 2, "result": res}
     state["heat"] = min(10, state["heat"] + 1)
     return {"helper": helper["name"], "bonus": 0, "complication": True, "result": res}
+ 
+COMBAT_FLAGS = {"alerted", "conflict", "pursued", "combat_in_progress",
+                "alarm_raised", "bloodbath", "guards_alerted", "guards_aggressive"}
+
+NPC_FALLBACK = {
+    "stats": {"REF": 5, "DEX": 4, "BODY": 5, "WILL": 4},
+    "skills": {"handgun": 3, "melee": 2},
+    "weapon": "heavy_pistol",
+    "armor": "kevlar",
+}
+
+
+def resolve_npc_reaction(state, actor, mech):
+    """NPC отвечает один раз после действия игрока, если бой уже начался."""
+    flags = set(state.get("flags", []))
+    if state.get("heat", 0) < 2 and not (flags & COMBAT_FLAGS):
+        return None
+
+    npc = next((n for n in state["npcs"] if n["id"] == state.get("threat")), None)
+    if npc is None:
+        npc = next((n for n in state["npcs"] if n.get("hp", 0) > 0), None)
+    if npc is None or npc.get("hp", 0) <= 0 or npc.get("dead"):
+        return None
+
+    data = {**NPC_FALLBACK, **npc}
+    skill = "melee" if data.get("weapon") in ("knife", "battleglove", "sword", "axe") else "handgun"
+    stat_key = SKILL_STAT.get(skill, "REF")
+    dv = DV.get("difficult", 15)
+    mods = WOUND_MOD.get(npc.get("wound", "unharmed"), 0)
+    roll = skill_check(data["stats"].get(stat_key, 5),
+                       data["skills"].get(skill, 2), dv, mods)
+
+    out = {"npc": npc["name"], "success": roll["success"],
+           "total": roll["total"], "dv": dv, "damage": 0, "net_damage": 0}
+
+    if roll["success"]:
+        w = WEAPONS.get(data.get("weapon", "heavy_pistol"), {"damage": "2d6"})
+        dmg, faces = roll_dice(w.get("damage", "2d6"))
+        sp = ARMOR.get(actor.get("armor", "leathers"), {}).get("sp", 0)
+        net = max(0, dmg - sp)
+        out.update({"damage": dmg, "armor_sp": sp, "net_damage": net})
+        if net > 0:
+            apply_damage(actor, net)
+            out["actor_hp"] = actor["hp"]
+            out["actor_wound"] = actor.get("wound")
+    return out 

@@ -43,7 +43,7 @@ def show_state(st):
     print(f"Ходит: {st['order'][st['turn']]}")
 
 
-def show_result(r):
+def show_result(r, sid):
     m = r.get("mechanics", {})
     line = (f"[механика] {m.get('action_type', '?')} | "
             f"{m.get('stat_key', '?')}+{m.get('skill', '?')}: "
@@ -54,18 +54,49 @@ def show_result(r):
                  f"- SP{m.get('armor_sp')} = {m.get('net_damage')}")
     if m.get("critical_injury"):
         line += " | КРИТ-ТРАВМА"
-    a = r.get("assist")
-    if a:
-        line += f" | помощь {a.get('helper')}: +{a.get('bonus', 0)}"
-    print()
-    print(line)
-    print()
+    nr = m.get("npc_reaction")
+    if nr:
+        line += (f"\n[ответ NPC] {nr['npc']}: "
+                 + ("попадание" if nr["success"] else "промах")
+                 + f", урон по игроку {nr.get('net_damage', 0)}")
+    print("\n" + line + "\n")
     print(r.get("narration") or "(нарратив недоступен)")
     for q in r.get("questions", []):
         print("  ?", q)
     if r.get("choices"):
         print("  варианты:", " / ".join(r["choices"]))
     print()
+
+    tid = r.get("turn_id")
+    if not tid:
+        return
+    rate = input("Оценка нарратива (1-5) / Enter = пропустить: ").strip()
+    if not rate.isdigit() or not 1 <= int(rate) <= 5:
+        return
+    edited = None
+    if int(rate) <= 3:
+        edited = input("Твой вариант нарратива / Enter = пропустить: ").strip() or None
+    try:
+        requests.post(f"{API}/session/{sid}/turn/{tid}/rate",
+                      json={"rating": int(rate), "edited": edited}, timeout=10)
+        print("Оценка сохранена.\n")
+    except Exception as e:
+        print(f"Не удалось сохранить оценку: {e}")
+
+    # === ОЦЕНКА ХОДА ===
+    rate = input("Оценка (1-5) или Enter для пропуска: ").strip()
+    if rate and rate.isdigit() and 1 <= int(rate) <= 5:
+        rating = int(rate)
+        edited = None
+        if rating <= 3:
+            print("Напиши свой вариант нарратива (или Enter для пропуска):")
+            edited = input("> ").strip() or None
+        try:
+            requests.post(f"{API}/session/{sid}/turn/{turn_no}/rate",
+                          json={"rating": rating, "edited": edited}, timeout=10)
+            print(f"Оценка {rating} сохранена.")
+        except Exception as e:
+            print(f"Ошибка сохранения оценки: {e}")
 
 
 def main():
