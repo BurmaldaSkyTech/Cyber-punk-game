@@ -16,8 +16,7 @@ DV = {str(r.get("level", "")).lower(): int(r["dv"])
       if r.get("dv") is not None and str(r.get("dv")).lstrip("-").isdigit()} \
      or _load("dv.json", {"simple": 9, "everyday": 13, "difficult": 15,
                           "professional": 17, "heroic": 21, "incredible": 24, "legendary": 29})
-WEAPONS = db.family_map("ranged_weapons") | db.family_map("melee_weapons") \
-          or _load("weapons.json", {})
+WEAPONS = db.family_map("weapons") or _load("weapons.json", {})
 ARMOR = db.family_map("armor") or _load("armor.json", {})
 
 WOUND_MOD = {"unharmed": 0, "lightly": 0, "seriously": -2, "mortally": -4}

@@ -48,5 +48,10 @@ def validate(rows, md):
 def clean(s):
     s = CJK.sub("", s or "")
     s = re.sub(r"掩码部分敏感信息.*", "", s, flags=re.S)
-    s = re.sub(r"\b[a-zA-Z]{3,}\b", "", s)  # убрать отдельные латинские слова
-    return re.sub(r"\s+", " ", s).strip()
+    # Убираем латинские слова и осколки (1+ буква)
+    s = re.sub(r"[a-zA-ZÀ-ÿ']+", "", s)
+    # Убираем повторяющиеся пробелы и знаки препинания подряд
+    s = re.sub(r"\s+", " ", s)
+    s = re.sub(r"\s+([,.;:!?])", r"\1", s)
+    s = re.sub(r"([,.;:!?]){2,}", r"\1", s)
+    return s.strip()

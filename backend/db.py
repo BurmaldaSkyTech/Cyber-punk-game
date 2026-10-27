@@ -5,7 +5,7 @@ try:
 except Exception:
     psycopg = None
 
-DSN = os.environ.get("PG_DSN", "postgresql://postgres:postgres@localhost:5432/cpr")
+DSN = os.environ.get("PG_DSN", "postgresql://postgres:412321@localhost:7777/cpr")
 _conn = None
 
 
