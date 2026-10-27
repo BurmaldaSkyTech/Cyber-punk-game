@@ -172,11 +172,12 @@ def act(sid: str, req: ActionIn):
     if not st:
         raise HTTPException(404)
     actor = next((p for p in st["players"] if p["name"] == req.player), None)
-        expected = st["order"][st["turn"]]
-    if req.player != expected:
-        raise HTTPException(409, f"Сейчас ходит {expected}, а не {req.player}")
     if not actor:
         raise HTTPException(404, "no such player")
+
+    expected = st["order"][st["turn"]]
+    if req.player != expected:
+        raise HTTPException(409, f"Сейчас ходит {expected}, а не {req.player}")
 
     scene = st["scenario"].get("scene", "")
     npc_lines = "; ".join(f"{n['id']}={n['name']}" for n in st["npcs"])
