@@ -27,7 +27,6 @@ ACTION_LABEL = {
 
 JUDGE_SYS = """Ты — механический интерпретатор правил Cyberpunk RED. Никакой прозы, только JSON:
 {"action_type": "skill|attack_ranged|attack_melee|hack|social|heal",
-"нетран, взлом, подключение к камере, создать помехи в сети" -> {"action_type":"hack","skill":"interface","dv_key":"professional","weapon":null,"target":null,"query":"netrunning hack DV"}
  "skill": "ключ навыка строго из списка персонажа",
  "dv_key": "simple|everyday|difficult|professional|heroic|incredible|legendary",
  "weapon": "ключ оружия или null", "target": "id NPC или null",
@@ -39,9 +38,10 @@ JUDGE_SYS = """Ты — механический интерпретатор пр
 "этот пьяный придурок в меня врезался и пытается выставить виноватым" (словами отводит вину) -> {"action_type":"social","skill":"persuasion","dv_key":"everyday","weapon":null,"target":"guard1","second":null,"query":"social opposed check"}
 "кинул гранату, затем взломал его канал связи" -> {"action_type":"attack_ranged","skill":"athletics","dv_key":"difficult","weapon":"grenade","target":"guard1","second":{"action_type":"hack","skill":"interface","dv_key":"professional","weapon":null,"target":null},"query":"grenade damage"}
 "пройти мимо курьера и незаметно дёрнуть флешку" -> {"action_type":"skill","skill":"stealth","dv_key":"difficult","weapon":null,"target":"courier","second":null,"query":"pickpocket stealth DV"}
-Ключевые слова "нетран", "взлом сети", "подключение к системе", "создать помехи в электронике" ВСЕГДА -> hack, НЕ social.
+"нетран, взлом сети, подключение к системе, создать помехи в электронике" -> {"action_type":"hack","skill":"interface","dv_key":"professional","weapon":null,"target":null,"query":"netrunning hack DV"}
 
 ГЛАВНОЕ: если персонаж ГОВОРИТ, лжёт, притворяется — это social, НЕ атака. Атака — только насилие или выстрел. Граната/бомба -> attack_ranged, weapon grenade.
+Ключевые слова "нетран", "взлом сети", "подключение к системе", "создать помехи в электронике" ВСЕГДА -> hack, НЕ social.
 Составное действие ("затем", "сразу после", "и тут же") -> первая часть в основные поля, вторая в second.
 Местоимения ("него", "ему") относят к ТЕКУЩЕЙ УГРОЗЕ, если она указана.
 skill строго из списка персонажа. dv_key: в упор/тривиально -> everyday; цель настороже, средняя дистанция -> difficult; взлом защиты, дальний бой -> professional; на грани -> heroic.
@@ -58,6 +58,7 @@ NARR_SYS = """Ты — игровой мастер текстовой кибер
 6. Описывай только те изменения состояния NPC, которые есть в ПОСЛЕДСТВИЯХ.
 7. Числа урона, HP, DV — только из ФАКТОВ.
 8. Объём 3–5 предложений, затем 1–2 вопроса и 2–4 варианта инфинитивом.
+9. РЕАКЦИЯ NPC: Если игрок успешно атакует или взламывает NPC, NPC должен активно реагировать: отбиваться, уклоняться, контратаковать, звать подмогу, хватать оружие. Пассивное поведение ("он просто стоит") запрещено.
 
 ПРИМЕРЫ (копировать их фразы запрещено):
 ФАКТЫ: действие "незаметно дёрнуть флешку", ПРОВАЛ, margin -2
@@ -67,7 +68,7 @@ NARR_SYS = """Ты — игровой мастер текстовой кибер
 
 Верни только JSON:
 {"narration": str, "questions": [str], "choices": [str],
- "safe_state_suggestions": {"heat_delta": -1|0|1, "add_flags": [str], "clock_progress": {name: 0|1|2}}}"""
+ "safe_state_suggestions": {"heat_delta": -1|0|1, "add_flags": [str], "clock_progress": {name: 0|1|2}, "npc_action": str}}"""
 
 
 class NewSession(BaseModel):
@@ -79,6 +80,11 @@ class ActionIn(BaseModel):
     player: str
     text: str
     assist: Optional[str] = None
+
+
+class RateIn(BaseModel):
+    rating: int  # 1..5
+    edited: Optional[str] = None
 
 
 @app.post("/session")
@@ -110,7 +116,8 @@ def clamp_suggestions(s, st):
         if f not in st["flags"] and f not in flags:
             flags.append(f)
     clocks = {k: max(0, min(2, int(v))) for k, v in (s.get("clock_progress") or {}).items()}
-    return {"heat_delta": hd, "add_flags": flags, "clock_progress": clocks}
+    npc_action = s.get("npc_action") or ""
+    return {"heat_delta": hd, "add_flags": flags, "clock_progress": clocks, "npc_action": npc_action}
 
 
 def consequences(mech):
@@ -211,6 +218,9 @@ def act(sid: str, req: ActionIn):
         if cname in st["clocks"]:
             st["clocks"][cname]["progress"] = min(
                 st["clocks"][cname]["max"], st["clocks"][cname]["progress"] + inc)
+    # NPC активно реагирует
+    if sug["npc_action"]:
+        st["flags"].append(sug["npc_action"])
 
     narration = clean(reply.get("narration", ""))
     questions = [clean(q) for q in reply.get("questions", []) if clean(q)]
@@ -218,7 +228,8 @@ def act(sid: str, req: ActionIn):
 
     st["log"].append({"player": req.player, "text": req.text, "mech": mech,
                       "narration": narration})
-    db.log_turn(sid, len(st["log"]) - 1, req.player, req.text, judge, mech, narration)
+    turn_no = len(st["log"]) - 1
+    db.log_turn(sid, turn_no, req.player, req.text, judge, mech, narration)
     st["turn"] = (st["turn"] + 1) % len(st["order"])
 
     for p in st["players"]:
@@ -227,4 +238,15 @@ def act(sid: str, req: ActionIn):
 
     return {"mechanics": mech, "assist": assist, "narration": narration,
             "questions": questions, "choices": choices,
+            "turn_no": turn_no,
             "next_player": st["order"][st["turn"]], "state": st}
+
+
+@app.post("/session/{sid}/turn/{tid}/rate")
+def rate_turn(sid: str, tid: int, req: RateIn):
+    if sid not in SESSIONS:
+        raise HTTPException(404, "Session not found")
+    if not (1 <= req.rating <= 5):
+        raise HTTPException(400, "Rating must be 1-5")
+    db.rate_turn(tid, req.rating, req.edited)
+    return {"ok": True, "turn_id": tid, "rating": req.rating}
