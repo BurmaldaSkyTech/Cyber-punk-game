@@ -1,8 +1,12 @@
 # backend/main.py
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Optional
 import uuid, json, os
+from pathlib import Path
 
 from . import db, engine
 from .llm import chat_json
@@ -10,6 +14,21 @@ from .rag import RulesSearch
 from .common import clean, CJK
 
 app = FastAPI()
+
+# CORS для веб-клиента (доступ с любых адресов)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Статические файлы для веб-клиента
+STATIC = Path(__file__).resolve().parent.parent / "static"
+STATIC.mkdir(exist_ok=True)
+app.mount("/static", StaticFiles(directory=STATIC), name="static")
+
 SEARCH = RulesSearch()
 SESSIONS = {}
 
@@ -83,8 +102,13 @@ class ActionIn(BaseModel):
 
 
 class RateIn(BaseModel):
-    rating: int  # 1..5
+    rating: int
     edited: Optional[str] = None
+
+
+@app.get("/")
+def index():
+    return FileResponse(STATIC / "index.html")
 
 
 @app.post("/session")
@@ -132,13 +156,13 @@ def consequences(mech):
                 cons.append(f"- попадание по {m.get('target')}: сквозь броню {m.get('net_damage')}"
                             + (", КРИТ-ТРАВМА (+5 мимо брони)" if m.get("critical_injury") else "")
                             + f", у цели HP {m.get('target_hp')} ({m.get('target_wound')})")
-        r = mech.get("npc_reaction")
+    r = mech.get("npc_reaction")
     if r:
         if r["success"]:
             cons.append(f"- {r['npc']} КОНТРАТАКУЕТ: урон {r['damage']} - "
                         f"SP{r.get('armor_sp', 0)} = {r['net_damage']} по игроку")
         else:
-            cons.append(f"- {r['npc']} контратакует и промахивается ({r['total']} vs DV{r['dv']})")                        
+            cons.append(f"- {r['npc']} контратакует и промахивается ({r['total']} vs DV{r['dv']})")
     return "\n".join(cons) or "- урон не наносился"
 
 
@@ -148,6 +172,9 @@ def act(sid: str, req: ActionIn):
     if not st:
         raise HTTPException(404)
     actor = next((p for p in st["players"] if p["name"] == req.player), None)
+        expected = st["order"][st["turn"]]
+    if req.player != expected:
+        raise HTTPException(409, f"Сейчас ходит {expected}, а не {req.player}")
     if not actor:
         raise HTTPException(404, "no such player")
 
@@ -184,13 +211,15 @@ def act(sid: str, req: ActionIn):
         mech["success"] = mech["total"] >= mech["dv"]
         mech["assist"] = assist
 
+    # NPC контратакует один раз после действия игрока (при активном бое)
+    reaction = engine.resolve_npc_reaction(st, actor, mech)
+    if reaction:
+        mech["npc_reaction"] = reaction
+
     for m in [mech] + ([mech["second"]] if isinstance(mech.get("second"), dict) else []):
         if m.get("target_id"):
             st["threat"] = m["target_id"]
-    
-    reaction = engine.resolve_npc_reaction(st, actor, mech)
-    if reaction:
-        mech["npc_reaction"] = reaction          
+
     outcome = "УСПЕХ" if mech["success"] else "ПРОВАЛ"
     facts = json.dumps(mech, ensure_ascii=False)
     cons = consequences(mech)
@@ -228,7 +257,6 @@ def act(sid: str, req: ActionIn):
         if cname in st["clocks"]:
             st["clocks"][cname]["progress"] = min(
                 st["clocks"][cname]["max"], st["clocks"][cname]["progress"] + inc)
-    # NPC активно реагирует
     if sug["npc_action"]:
         st["flags"].append(sug["npc_action"])
 
@@ -239,7 +267,7 @@ def act(sid: str, req: ActionIn):
     st["log"].append({"player": req.player, "text": req.text, "mech": mech,
                       "narration": narration})
     turn_no = len(st["log"]) - 1
-    db.log_turn(sid, turn_no, req.player, req.text, judge, mech, narration)    turn_id = db.log_turn(sid, turn_no, req.player, req.text, judge, mech, narration)
+    turn_id = db.log_turn(sid, turn_no, req.player, req.text, judge, mech, narration)
     st["turn"] = (st["turn"] + 1) % len(st["order"])
 
     for p in st["players"]:
@@ -248,7 +276,7 @@ def act(sid: str, req: ActionIn):
 
     return {"mechanics": mech, "assist": assist, "narration": narration,
             "questions": questions, "choices": choices,
-            "turn_no": turn_no,
+            "turn_no": turn_no, "turn_id": turn_id,
             "next_player": st["order"][st["turn"]], "state": st}
 
 
@@ -259,7 +287,4 @@ def rate_turn(sid: str, tid: int, req: RateIn):
     if not (1 <= req.rating <= 5):
         raise HTTPException(400, "Rating must be 1-5")
     db.rate_turn(tid, req.rating, req.edited)
-    return {"ok": True, "turn_id": tid, "rating": req.rating}    return {"mechanics": mech, "assist": assist, "narration": narration,
-            "questions": questions, "choices": choices,
-            "turn_no": turn_no, "turn_id": turn_id,
-            "next_player": st["order"][st["turn"]], "state": st}
+    return {"ok": True, "turn_id": tid, "rating": req.rating}
