@@ -9,6 +9,7 @@ import uuid, json, os
 from pathlib import Path
 
 from . import db, engine
+from . import chargen
 from .llm import chat_json
 from .rag import RulesSearch
 from .common import clean, CJK
@@ -280,6 +281,21 @@ def act(sid: str, req: ActionIn):
             "turn_no": turn_no, "turn_id": turn_id,
             "next_player": st["order"][st["turn"]], "state": st}
 
+class ChargenIn(BaseModel):
+    mode: str = "random"
+    role: Optional[str] = None
+    seed: Optional[int] = None
+    manual: Optional[dict] = None
+
+
+@app.post("/chargen")
+def chargen_endpoint(req: ChargenIn):
+    if req.mode == "manual":
+        ch, problems = chargen.manual_character(req.manual or {})
+        if problems:
+            raise HTTPException(400, detail=problems)
+        return ch
+    return chargen.random_character(role=req.role, seed=req.seed)
 
 @app.post("/session/{sid}/turn/{tid}/rate")
 def rate_turn(sid: str, tid: int, req: RateIn):
@@ -289,3 +305,9 @@ def rate_turn(sid: str, tid: int, req: RateIn):
         raise HTTPException(400, "Rating must be 1-5")
     db.rate_turn(tid, req.rating, req.edited)
     return {"ok": True, "turn_id": tid, "rating": req.rating}
+
+@app.post("/chargen/validate")
+def chargen_validate(req: dict):
+    """Проверяет, что собранный персонаж валиден по правилам."""
+    _, problems = chargen.manual_character(req)
+    return {"valid": len(problems) == 0, "problems": problems}    

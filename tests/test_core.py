@@ -83,6 +83,48 @@ def test_clean_latin():
     assert clean("привет hello мир") == "привет мир"
     assert clean("пластины armorjack искры") == "пластины искры"
 
+def test_chargen_random_valid():
+    from backend import chargen
+    for seed in range(20):
+        ch = chargen.random_character(seed=seed)
+        assert chargen.validate_character(ch) == []
+        assert sum(ch["stats"].values()) == 62
+        assert ch["hp"] == ch["stats"]["BODY"] * 2
+
+
+def test_chargen_validate_catches_cheat():
+    from backend import chargen
+    ch = chargen.random_character(seed=1)
+    ch["stats"]["BODY"] = 9
+    assert chargen.validate_character(ch) != []
+
+def test_chargen_random_valid():
+    from backend import chargen
+    for seed in range(20):
+        ch = chargen.random_character(seed=seed)
+        assert chargen.validate_character(ch) == []
+        assert sum(ch["stats"].values()) == 62
+        assert ch["hp"] == ch["stats"]["BODY"] * 2
+        assert "Neural Link" in ch["cyberware"]
+        assert ch["eb"] > 0
+        assert "cultural_origins" in ch["lifepath"]
+
+
+def test_chargen_validate_catches_cheat():
+    from backend import chargen
+    ch = chargen.random_character(seed=1)
+    ch["stats"]["BODY"] = 9
+    assert chargen.validate_character(ch) != []
+
+
+def test_chargen_lifepath():
+    from backend import chargen
+    ch = chargen.random_character(seed=42)
+    lp = ch["lifepath"]
+    assert "cultural_origins" in lp
+    assert "family_background" in lp
+    assert "childhood_environment" in lp
+    assert "family_crisis" in lp
 
 def test_no_mojibake_in_chunks():
     p = ROOT / "data" / "chunks" / "chunks.jsonl"
