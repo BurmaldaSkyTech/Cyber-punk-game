@@ -130,10 +130,8 @@ def distribute_skills(career_skills):
     print("Доступные навыки: athletics, melee, evasion, stealth, handgun, shoulder_arms,")
     print("  perception, deduction, interface, programming, electronics, basic_tech,")
     print("  persuasion, conversation, first_aid, paramedic, trading, ...")
-    pool_left = 10 - sum(v for v in skills.values() if v > 3)  # считаем только выше 3
-    # на самом деле карьерные уже стоят своих очков, пул 10 только на дополнительные
+    print(f"\n  Осталось очков: 10")
     pool = 10
-    print(f"\n  Осталось очков: {pool}")
     while pool > 0:
         raw = input(f"  [осталось {pool}] > ").strip().lower()
         if not raw:
@@ -149,6 +147,11 @@ def distribute_skills(career_skills):
         if rank > pool:
             print(f"    Не хватает очков (осталось {pool})")
             continue
+        # Проверяем, что навык не карьерный
+        if sk in career_skills:
+            print(f"    Навык {sk} уже карьерный (ранк {skills[sk]})")
+            continue
+        # Для pickup: максимальный ранк 6 (не суммируется с карьерным)
         current = skills.get(sk, 0)
         new_val = current + rank
         if new_val > 6:

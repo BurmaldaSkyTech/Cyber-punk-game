@@ -221,10 +221,7 @@ def validate_character(ch):
         problems.append("role: неизвестная роль")
     elif not career <= set(sk):
         problems.append(f"skills: нет карьерных навыков {career - set(sk)}")
-    if "Neural Link" not in ch.get("cyberware", []):
-        problems.append("cyberware: отсутствует обязательный Neural Link")
-    if ch.get("eb") is None:
-        problems.append("eb: не указаны стартовые деньги")
+    # Убираем проверку cyberware/eb для manual — они добавляются автоматически
     return problems
 
 

@@ -109,7 +109,14 @@ class RateIn(BaseModel):
 
 @app.get("/")
 def index():
+    from fastapi.responses import FileResponse
     return FileResponse(STATIC / "index.html")
+
+
+@app.get("/setup")
+def setup_page():
+    from fastapi.responses import FileResponse
+    return FileResponse(STATIC / "setup.html")
 
 
 @app.post("/session")
@@ -294,6 +301,16 @@ def chargen_endpoint(req: ChargenIn):
         ch, problems = chargen.manual_character(req.manual or {})
         if problems:
             raise HTTPException(400, detail=problems)
+        # Добавляем cyberware и eb на основе роли
+        role = ch.get("role")
+        if role in chargen.ROLES:
+            rd = chargen.ROLES[role]
+            ch.setdefault("cyberware", rd["starting_cyberware"])
+            ch.setdefault("eb", chargen.STARTING_EB[role])
+            ch.setdefault("weapon", rd["weapon"])
+            ch.setdefault("armor", rd["armor"])
+            ch.setdefault("gear", rd["items"])
+            ch.setdefault("ability", rd["ability"])
         return ch
     return chargen.random_character(role=req.role, seed=req.seed)
 
@@ -309,5 +326,15 @@ def rate_turn(sid: str, tid: int, req: RateIn):
 @app.post("/chargen/validate")
 def chargen_validate(req: dict):
     """Проверяет, что собранный персонаж валиден по правилам."""
+    # Добавляем cyberware и eb на основе роли перед валидацией
+    role = req.get("role")
+    if role in chargen.ROLES:
+        rd = chargen.ROLES[role]
+        req.setdefault("cyberware", rd["starting_cyberware"])
+        req.setdefault("eb", chargen.STARTING_EB[role])
+        req.setdefault("weapon", rd["weapon"])
+        req.setdefault("armor", rd["armor"])
+        req.setdefault("gear", rd["items"])
+        req.setdefault("ability", rd["ability"])
     _, problems = chargen.manual_character(req)
-    return {"valid": len(problems) == 0, "problems": problems}    
+    return {"valid": len(problems) == 0, "problems": problems}

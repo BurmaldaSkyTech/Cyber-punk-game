@@ -39,7 +39,8 @@
       <input id="name" placeholder="Имя игрока" value="Игрок">
     </div>
     <div class="row">
-      <button onclick="start()">Начать игру</button>
+      <button onclick="start()">Быстрый старт</button>
+      <button onclick="window.location.href='/setup'" class="secondary">Создать персонажей по правилам →</button>
     </div>
   </div>
 
@@ -196,6 +197,20 @@ async function saveRate() {
   });
   document.getElementById('rating').classList.add('hidden');
   resetStars();
+// добавь в конец <script> в index.html
+window.addEventListener('load', async () => {
+  const sid = localStorage.getItem('sid');
+  if (!sid) return;
+  try {
+    const r = await fetch(`/session/${sid}`);
+    if (r.ok) {
+      document.getElementById('setup').classList.add('hidden');
+      document.getElementById('game').classList.remove('hidden');
+      document.getElementById('log').innerHTML = '';
+      addLog(`Сессия ${sid} восстановлена из мастера создания.`, 'mech');
+    }
+  } catch(e) {}
+});  
 }
 </script>
 </body>

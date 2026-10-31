@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cyberpunk RED — Создание персонажа</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: 'Segoe UI', sans-serif; background: #0a0a0f; color: #e0e0e5; margin: 0; padding: 20px; }
+  .container { max-width: 900px; margin: 0 auto; }
+  h1 { color: #ff2a6d; text-shadow: 0 0 10px #ff2a6d; text-align: center; }
+  .step-title { color: #05d9e8; font-size: 1.4em; margin-bottom: 10px; }
+  .panel { background: #12121a; border: 1px solid #333; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+  .player-tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+  .tab { flex: 1; padding: 12px; text-align: center; background: #1a1a25; border: 2px solid #333; border-radius: 8px; cursor: pointer; font-size: 1.1em; }
+  .tab.active { border-color: #ff2a6d; color: #ff2a6d; }
+  .tab.done { border-color: #05d9e8; color: #05d9e8; }
+  .role-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+  .role-card { padding: 15px 10px; background: #1a1a25; border: 2px solid #333; border-radius: 8px; cursor: pointer; text-align: center; }
+  .role-card:hover { border-color: #05d9e8; }
+  .role-card.selected { border-color: #ff2a6d; background: #2a1a25; }
+  .role-card b { display: block; color: #05d9e8; margin-bottom: 4px; }
+  .role-card small { color: #888; font-size: 0.8em; }
+  .stats-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 15px; }
+  .stat-box { background: #1a1a25; padding: 12px; border-radius: 8px; text-align: center; }
+  .stat-box label { display: block; color: #05d9e8; margin-bottom: 6px; font-weight: bold; }
+  .stat-box input { width: 60px; text-align: center; background: #0a0a0f; color: #fff; border: 1px solid #444; padding: 6px; border-radius: 4px; font-size: 1.1em; }
+  .pool-info { text-align: center; font-size: 1.2em; margin: 15px 0; padding: 10px; border-radius: 6px; }
+  .pool-info.ok { background: #1a2a1a; color: #0f0; }
+  .pool-info.warn { background: #2a2a1a; color: #ff0; }
+  .pool-info.err { background: #2a1a1a; color: #f66; }
+  .lifepath-section { margin-bottom: 15px; padding: 12px; background: #1a1a25; border-radius: 6px; }
+  .lifepath-section b { color: #05d9e8; display: block; margin-bottom: 6px; }
+  .lifepath-row { display: flex; gap: 10px; align-items: center; }
+  .lifepath-row select { flex: 1; background: #0a0a0f; color: #fff; border: 1px solid #444; padding: 8px; border-radius: 4px; }
+  .lifepath-row button { background: #333; color: #fff; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; }
+  .lifepath-row button:hover { background: #555; }
+  .career-skills { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px; }
+  .skill-item { display: flex; align-items: center; gap: 10px; background: #1a1a25; padding: 10px; border-radius: 6px; }
+  .skill-item span { flex: 1; color: #05d9e8; }
+  .skill-item select { background: #0a0a0f; color: #fff; border: 1px solid #444; padding: 6px; border-radius: 4px; }
+  .pickup-row { display: flex; gap: 10px; margin-bottom: 10px; }
+  .pickup-row select { flex: 2; background: #0a0a0f; color: #fff; border: 1px solid #444; padding: 8px; border-radius: 4px; }
+  .pickup-row input { flex: 1; background: #0a0a0f; color: #fff; border: 1px solid #444; padding: 8px; border-radius: 4px; }
+  .pickup-list { list-style: none; padding: 0; margin: 10px 0; }
+  .pickup-list li { display: flex; justify-content: space-between; background: #1a1a25; padding: 8px 12px; border-radius: 4px; margin-bottom: 4px; }
+  .pickup-list li button { background: #f66; color: #fff; border: none; padding: 2px 8px; border-radius: 4px; cursor: pointer; }
+  .nav-buttons { display: flex; justify-content: space-between; margin-top: 20px; }
+  button.btn { background: #ff2a6d; color: white; border: none; padding: 12px 28px; border-radius: 4px; cursor: pointer; font-size: 1.1em; }
+  button.btn:hover { background: #d91e56; }
+  button.btn.secondary { background: #333; }
+  button.btn.secondary:hover { background: #555; }
+  button.btn:disabled { background: #444; cursor: not-allowed; }
+  .name-input { width: 100%; background: #0a0a0f; color: #fff; border: 1px solid #444; padding: 12px; border-radius: 6px; font-size: 1.1em; margin-bottom: 15px; }
+  .summary { white-space: pre-wrap; font-family: monospace; background: #0a0a0f; padding: 15px; border-radius: 6px; font-size: 0.9em; max-height: 300px; overflow-y: auto; }
+  .error-msg { color: #f66; background: #2a1a1a; padding: 12px; border-radius: 6px; margin-top: 10px; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>СОЗДАНИЕ ПЕРСОНАЖА</h1>
+
+  <div class="player-tabs">
+    <div class="tab active" id="tab-0" onclick="switchPlayer(0)">Игрок 1</div>
+    <div class="tab" id="tab-1" onclick="switchPlayer(1)">Игрок 2</div>
+  </div>
+
+  <!-- ШАГ 1: ИМЯ + РОЛЬ -->
+  <div class="panel" id="step-1">
+    <div class="step-title">Шаг 1: Имя и роль</div>
+    <input type="text" class="name-input" id="charname" placeholder="Имя / хэндл персонажа">
+    <div class="role-grid" id="roleGrid"></div>
+    <div class="nav-buttons">
+      <span></span>
+      <button class="btn" onclick="goStep(2)">Далее →</button>
+    </div>
+  </div>
+
+  <!-- ШАГ 2: СТАТЫ -->
+  <div class="panel hidden" id="step-2">
+    <div class="step-title">Шаг 2: Характеристики (62 очка, каждая 2–8)</div>
+    <div class="pool-info" id="poolInfo">Осталось: 42</div>
+    <div class="stats-grid" id="statsGrid"></div>
+    <div class="nav-buttons">
+      <button class="btn secondary" onclick="goStep(1)">← Назад</button>
+      <button class="btn" id="btn-to-3" onclick="goStep(3)" disabled>Далее →</button>
+    </div>
+  </div>
+
+  <!-- ШАГ 3: ПРЕДЫСТОРИЯ -->
+  <div class="panel hidden" id="step-3">
+    <div class="step-title">Шаг 3: Предыстория</div>
+    <div id="lifepathContainer"></div>
+    <div class="nav-buttons">
+      <button class="btn secondary" onclick="goStep(2)">← Назад</button>
+      <button class="btn" onclick="goStep(4)">Далее →</button>
+    </div>
+  </div>
+
+  <!-- ШАГ 4: НАВЫКИ -->
+  <div class="panel hidden" id="step-4">
+    <div class="step-title">Шаг 4: Навыки</div>
+    <b style="color:#05d9e8">Карьерные навыки (выбери 2 или 3):</b>
+    <div class="career-skills" id="careerSkills"></div>
+    <b style="color:#05d9e8">Дополнительные навыки (пул 10 очков):</b>
+    <div class="pool-info" id="pickupPool">Осталось: 10</div>
+    <div class="pickup-row">
+      <select id="pickupSkill"></select>
+      <input type="number" id="pickupRank" min="1" max="6" value="1">
+      <button class="btn secondary" onclick="addPickup()">Добавить</button>
+    </div>
+    <ul class="pickup-list" id="pickupList"></ul>
+    <div class="nav-buttons">
+      <button class="btn secondary" onclick="goStep(3)">← Назад</button>
+      <button class="btn" onclick="finishChar()">Готово ✓</button>
+    </div>
+  </div>
+
+  <!-- ИТОГ / СТАРТ -->
+  <div class="panel hidden" id="step-5">
+    <div class="step-title">Готово! Проверь персонажей и запускай игру</div>
+    <div id="summaryContainer"></div>
+    <div class="error-msg hidden" id="startError"></div>
+    <div class="nav-buttons">
+      <button class="btn secondary" onclick="switchPlayer(0)">← Редактировать</button>
+      <button class="btn" onclick="startGame()">Начать игру ▶</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const ROLES = {
+  "Rockerboy": ["performance","persuasion","human_perception","acting"],
+  "Solo": ["handgun","melee","evasion","athletics"],
+  "Netrunner": ["interface","programming","electronics","perception"],
+  "Tech": ["basic_tech","electronics","cybertech","weaponstech"],
+  "Medtech": ["paramedic","first_aid","pharmaceuticals","human_perception"],
+  "Media": ["deduction","library_search","persuasion","acting"],
+  "Lawman": ["handgun","perception","deduction","criminology"],
+  "Exec": ["persuasion","conversation","deduction","trading"],
+  "Nomad": ["drive","land_vehicle_tech","athletics","perception"],
+  "Fixer": ["streetwise","persuasion","conversation","trading"]
+};
+const ROLE_DESC = {
+  "Rockerboy": "Музыкант-бунтарь", "Solo": "Наёмник/боец", "Netrunner": "Хакер",
+  "Tech": "Механик/изобретатель", "Medtech": "Медик", "Media": "Журналист",
+  "Lawman": "Коп", "Exec": "Корпоративный агент", "Nomad": "Кочевник", "Fixer": "Посредник"
+};
+const STATS = ["INT","REF","DEX","TECH","COOL","WILL","LUCK","MOVE","BODY","EMP"];
+const STAT_POOL = 62;
+const SKILLS = ["athletics","melee","evasion","stealth","contortionist","dance","drive","pilot",
+  "handgun","shoulder_arms","autofire","perception","deduction","library_search","criminology",
+  "streetwise","first_aid","tactics","interface","programming","electronics","basic_tech",
+  "cybertech","weaponstech","land_vehicle_tech","paramedic","pharmaceuticals",
+  "persuasion","conversation","human_perception","performance","acting","trading","concentration"];
+const LIFEPATH = {
+  "cultural_origins": ["North American","South American","Western European","Eastern European",
+    "Middle Eastern","North African","Sub-Saharan African","South Asian","Southeast Asian","East Asian","Oceania/Pacific"],
+  "family_background": ["Corporate Elite","Corporate Manager","Corporate Worker","Nomad Clan",
+    "Gang family","Urban Homeless","Rural Family Farm","Military family","Law Enforcement family",
+    "Entertainment family","Criminal family"],
+  "childhood_environment": ["The Street","War Zone","Nomad pack","Gang-controlled district",
+    "Urban slums","Suburban sprawl","Corporate housing block","Rural wasteland",
+    "Space station / orbital","Secure corporate arcology","Military base"],
+  "family_crisis": ["Family destroyed by war","Family imprisoned","Family bankrupt",
+    "Family killed by gang","Family member killed by corporation","Family split apart",
+    "Family member went missing","Family member betrayed you","Family member became cyberpsycho",
+    "Family exiled you","No crisis — stable childhood"]
+};
+
+let players = [null, null];
+let current = 0;
+let draft = { name:"", role:null, stats:{}, lifepath:{}, career:{}, pickups:[], pickup_pool:10 };
+
+function switchPlayer(i) {
+  saveDraft();
+  current = i;
+  document.querySelectorAll('.tab').forEach((t,idx)=>{
+    t.classList.toggle('active', idx===i);
+    t.classList.toggle('done', players[idx]!==null && idx!==i);
+  });
+  if (players[i]) { draft = JSON.parse(JSON.stringify(players[i])); }
+  else { draft = { name:"", role:null, stats:{}, lifepath:{}, career:{}, pickups:[], pickup_pool:10 }; }
+  renderAll();
+  goStep(1);
+}
+
+function saveDraft() {
+  draft.name = document.getElementById('charname').value.trim();
+  players[current] = JSON.parse(JSON.stringify(draft));
+}
+
+function renderAll() {
+  document.getElementById('charname').value = draft.name || "";
+  renderRoles(); renderStats(); renderLifepath(); renderSkills();
+}
+
+function renderRoles() {
+  const g = document.getElementById('roleGrid');
+  g.innerHTML = '';
+  for (const r in ROLES) {
+    const c = document.createElement('div');
+    c.className = 'role-card' + (draft.role===r ? ' selected' : '');
+    c.innerHTML = `<b>${r}</b><small>${ROLE_DESC[r]}</small>`;
+    c.onclick = () => { draft.role = r; renderRoles(); renderSkills(); };
+    g.appendChild(c);
+  }
+}
+
+function renderStats() {
+  const g = document.getElementById('statsGrid');
+  g.innerHTML = '';
+  for (const s of STATS) {
+    const box = document.createElement('div');
+    box.className = 'stat-box';
+    box.innerHTML = `<label>${s}</label><input type="number" min="2" max="8" value="${draft.stats[s]||2}">`;
+    box.querySelector('input').onchange = (e) => {
+      draft.stats[s] = parseInt(e.target.value)||2;
+      updatePool();
+    };
+    g.appendChild(box);
+  }
+  updatePool();
+}
+
+function updatePool() {
+  let sum = STATS.reduce((a,s)=>a+(draft.stats[s]||2), 0);
+  let left = STAT_POOL - sum;
+  const info = document.getElementById('poolInfo');
+  const btn = document.getElementById('btn-to-3');
+  if (left === 0) { info.textContent = "Все 62 очка распределены ✓"; info.className="pool-info ok"; btn.disabled=false; }
+  else if (left > 0) { info.textContent = `Осталось: ${left}`; info.className="pool-info warn"; btn.disabled=true; }
+  else { info.textContent = `Превышение на ${-left}`; info.className="pool-info err"; btn.disabled=true; }
+}
+
+function renderLifepath() {
+  const c = document.getElementById('lifepathContainer');
+  c.innerHTML = '';
+  for (const key in LIFEPATH) {
+    const opts = LIFEPATH[key];
+    const sec = document.createElement('div');
+    sec.className = 'lifepath-section';
+    const label = {
+      "cultural_origins": "Культурное происхождение",
+      "family_background": "Семья",
+      "childhood_environment": "Детство",
+      "family_crisis": "Семейный кризис"
+    }[key];
+    const options = opts.map((o,i)=>`<option value="${o}" ${draft.lifepath[key]===o?'selected':''}>${o}</option>`).join('');
+    sec.innerHTML = `<b>${label}</b><div class="lifepath-row">
+      <select>${options}</select>
+      <button type="button">🎲 2d6</button></div>`;
+    const sel = sec.querySelector('select');
+    sel.onchange = () => { draft.lifepath[key] = sel.value; };
+    sec.querySelector('button').onclick = () => {
+      const d1 = 1+Math.floor(Math.random()*6), d2 = 1+Math.floor(Math.random()*6);
+      const idx = d1 + d2 - 2;
+      sel.value = opts[idx];
+      draft.lifepath[key] = opts[idx];
+    };
+    c.appendChild(sec);
+  }
+}
+
+function renderSkills() {
+  const cs = document.getElementById('careerSkills');
+  cs.innerHTML = '';
+  if (!draft.role) return;
+  for (const sk of ROLES[draft.role]) {
+    const item = document.createElement('div');
+    item.className = 'skill-item';
+    const val = draft.career[sk] || 2;
+    item.innerHTML = `<span>${sk}</span><select><option value="2" ${val===2?'selected':''}>2</option><option value="3" ${val===3?'selected':''}>3</option></select>`;
+    item.querySelector('select').onchange = (e) => { draft.career[sk] = parseInt(e.target.value); };
+    cs.appendChild(item);
+  }
+  const ps = document.getElementById('pickupSkill');
+  ps.innerHTML = SKILLS.map(s=>`<option value="${s}">${s}</option>`).join('');
+  renderPickups();
+}
+
+function addPickup() {
+  const sk = document.getElementById('pickupSkill').value;
+  const rank = parseInt(document.getElementById('pickupRank').value)||1;
+  if (rank > draft.pickup_pool) { alert("Не хватает очков"); return; }
+  const existing = draft.pickups.find(p=>p.skill===sk);
+  if (existing) { existing.rank += rank; }
+  else { draft.pickups.push({skill: sk, rank}); }
+  draft.pickup_pool -= rank;
+  renderPickups();
+}
+
+function renderPickups() {
+  const list = document.getElementById('pickupList');
+  list.innerHTML = '';
+  for (const p of draft.pickups) {
+    const li = document.createElement('li');
+    li.innerHTML = `<span>${p.skill} (${p.rank})</span><button>✕</button>`;
+    li.querySelector('button').onclick = () => {
+      draft.pickup_pool += p.rank;
+      draft.pickups = draft.pickups.filter(x=>x!==p);
+      renderPickups();
+    };
+    list.appendChild(li);
+  }
+  const info = document.getElementById('pickupPool');
+  info.textContent = `Осталось: ${draft.pickup_pool}`;
+  info.className = 'pool-info ' + (draft.pickup_pool===0?'ok':(draft.pickup_pool>0?'warn':'err'));
+}
+
+function goStep(n) {
+  if (n===2 && !draft.role) { alert("Выбери роль"); return; }
+  document.querySelectorAll('.panel').forEach(p=>p.classList.add('hidden'));
+  document.getElementById('step-'+n).classList.remove('hidden');
+  if (n===2) updatePool();
+}
+
+function finishChar() {
+  saveDraft();
+  if (!draft.name || !draft.role) { alert("Имя и роль обязательны"); return; }
+  document.querySelectorAll('.tab').forEach((t,idx)=>{
+    t.classList.toggle('done', players[idx]!==null);
+  });
+  if (players[0] && players[1]) { showSummary(); }
+  else {
+    const other = current===0 ? 1 : 0;
+    if (!players[other]) {
+      if (confirm("Перейти к созданию второго игрока?")) switchPlayer(other);
+      else showSummary();
+    } else showSummary();
+  }
+}
+
+function showSummary() {
+  document.querySelectorAll('.panel').forEach(p=>p.classList.add('hidden'));
+  document.getElementById('step-5').classList.remove('hidden');
+  const c = document.getElementById('summaryContainer');
+  c.innerHTML = '';
+  for (let i=0; i<2; i++) {
+    const p = players[i];
+    if (!p) { c.innerHTML += `<div class="summary">Игрок ${i+1}: не создан</div>`; continue; }
+    const s = `Игрок ${i+1}: ${p.name} [${p.role}]
+Статы: ${STATS.map(x=>x+' '+(p.stats[x]||2)).join(', ')}
+Карьерные: ${Object.entries(p.career).map(([k,v])=>k+' '+v).join(', ')}
+Доп: ${p.pickups.map(x=>x.skill+' '+x.rank).join(', ')||'—'}
+Предыстория: ${Object.values(p.lifepath).join(' | ')}`;
+    c.innerHTML += `<div class="summary">${s}</div>`;
+  }
+}
+
+async function startGame() {
+  // Если второй игрок не создан — генерим случайного
+  for (let i=0; i<2; i++) {
+    if (!players[i]) {
+      const r = await fetch('/chargen', {method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({mode:'random'})});
+      players[i] = await r.json();
+    }
+  }
+  // Валидация
+  for (let i=0; i<2; i++) {
+    const p = players[i];
+    const body = {
+      name: p.name, role: p.role, stats: p.stats,
+      skills: {...p.career, ...Object.fromEntries(p.pickups.map(x=>[x.skill, x.rank]))},
+      lifepath: p.lifepath
+    };
+    const v = await fetch('/chargen/validate', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(body)}).then(r=>r.json());
+    if (!v.valid) {
+      document.getElementById('startError').textContent = `Игрок ${i+1}: ${v.problems.join('; ')}`;
+      document.getElementById('startError').classList.remove('hidden');
+      return;
+    }
+  }
+  // Собираем полных персонажей и создаём сессию
+  const fullPlayers = [];
+  for (const p of players) {
+    let full;
+    if (p.hp) { full = p; }
+    else {
+      full = {
+        name: p.name, role: p.role, stats: p.stats,
+        skills: {...p.career, ...Object.fromEntries(p.pickups.map(x=>[x.skill, x.rank]))},
+        hp: (p.stats.BODY||4)*2, max_hp: (p.stats.BODY||4)*2,
+        wound: "unharmed", dsp: 0, dead: false,
+        humanity: (p.stats.EMP||4)*10, lifepath: p.lifepath
+      };
+    }
+    fullPlayers.push(full);
+  }
+  const scenario = {
+    scene: "Ржавый рынок, Ночной Город, 02:14. Под эстакадой гудит чёрный рынок: краденые импланты, дроны, синтетическая лапша. Где-то между рядами прячется курьер с нейрофлешкой, которую хочет получить фиксер Кесслер.",
+    heat: 1,
+    clocks: {security_response: {max: 6, progress: 1}},
+    npcs: [
+      {id:"courier", name:"Курьер", hp:20, max_hp:20, wound:"unharmed", armor:"leathers"},
+      {id:"guard1", name:"Охранник рынка", hp:24, max_hp:24, wound:"unharmed", armor:"kevlar"}
+    ]
+  };
+  const r = await fetch('/session', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({players: fullPlayers, scenario})});
+  const d = await r.json();
+  localStorage.setItem('sid', d.id);
+  window.location.href = '/';
+}
+
+// init
+renderAll();
+</script>
+</body>
+</html>
