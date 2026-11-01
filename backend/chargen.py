@@ -231,6 +231,10 @@ def manual_character(payload):
     ch.setdefault("dsp", 0)
     ch.setdefault("dead", False)
     st = ch.get("stats", {})
+    # Достраиваем недостающие статы до минимума (2)
+    for s in STATS:
+        st.setdefault(s, STAT_MIN)
+    ch["stats"] = st
     ch["hp"] = ch.get("hp", st.get("BODY", 4) * 2)
     ch["max_hp"] = ch.get("max_hp", st.get("BODY", 4) * 2)
     return ch, validate_character(ch)

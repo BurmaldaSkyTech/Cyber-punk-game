@@ -10,6 +10,7 @@ from pathlib import Path
 
 from . import db, engine
 from . import chargen
+from . import scenario
 from .llm import chat_json
 from .rag import RulesSearch
 from .common import clean, CJK
@@ -67,6 +68,46 @@ JUDGE_SYS = """Ты — механический интерпретатор пр
 skill строго из списка персонажа. dv_key: в упор/тривиально -> everyday; цель настороже, средняя дистанция -> difficult; взлом защиты, дальний бой -> professional; на грани -> heroic.
 Верни ТОЛЬКО JSON."""
 
+NARR_SYS_FIXER = """Ты — игровой мастер. АКТ 1: Встреча с фиксером Кесслером в баре 'Ржавый болт'.
+Жанр: мрачный неонуар. Кесслер — циничный делец, не любит пустой болтовни.
+ПРАВИЛА:
+1. Третье лицо о персонаже игрока.
+2. Начни прямо с реакции Кесслера на слова игрока.
+3. УСПЕХ: Кесслер соглашается на улучшение контракта. ПРОВАЛ: Кесслер раздражён, patience -1.
+4. Кесслер может предложить встречные условия или отказать, если patience низкий.
+5. Объём 3–5 предложений, затем 1–2 вопроса и 2–4 варианта.
+
+Верни JSON:
+{"narration": str, "questions": [str], "choices": [str],
+ "safe_state_suggestions": {"heat_delta": -1|0|1, "add_flags": [str]}}"""
+
+NARR_SYS_RECON = """Ты — игровой мастер. АКТ 2: Рекогносцировка дата-узла Biotechnica.
+Жанр: технотриллер. Описание территории: серое здание, камеры, патрули, служебный вход.
+ПРАВИЛА:
+1. Третье лицо о персонаже игрока.
+2. Начни с результата проверки (успех/провал).
+3. УСПЕХ: игрок получает asset (blind_spot, patrol_schedule и т.д.). ПРОВАЛ: suspicion +1.
+4. Описывай только то, что есть в ФАКТАХ.
+5. Объём 3–5 предложений, затем 1–2 вопроса и 2–4 варианта.
+
+Верни JSON:
+{"narration": str, "questions": [str], "choices": [str],
+ "safe_state_suggestions": {"heat_delta": 0, "add_flags": [str]}}"""
+
+NARR_SYS_INFILTRATION = """Ты — игровой мастер. АКТ 3: Проникновение в Biotechnica.
+Жанр: напряжённый экшен. Описание: коридоры, камеры, охрана (4 guard + сержант).
+ПРАВИЛА:
+1. Третье лицо о персонаже игрока.
+2. Начни с результата действия.
+3. УСПЕХ: игрок продвигается к цели. ПРОВАЛ: lockdown +1, возможно обнаружение.
+4. Если lockdown >= 6 — подкрепление прибывает, контракт провален.
+5. Объём 3–5 предложений, затем 1–2 вопроса и 2–4 варианта.
+6. NPC активно реагируют: охрана патрулирует, сержант командует.
+
+Верни JSON:
+{"narration": str, "questions": [str], "choices": [str],
+ "safe_state_suggestions": {"heat_delta": 0, "add_flags": [str], "clock_progress": {name: 0|1|2}}}"""
+
 NARR_SYS = """Ты — игровой мастер текстовой киберпанк-настолки. Пиши СТРОГО на русском, без латинских и иероглифических букв внутри слов.
 Жанр: мрачный неонуар, короткая жёсткая проза. Запрещены штампы "в воздухе витает", "запах коррозии и тайны".
 ПРАВИЛА:
@@ -122,13 +163,16 @@ def setup_page():
 @app.post("/session")
 def new_session(req: NewSession):
     sid = uuid.uuid4().hex[:8]
+    base = scenario.init_scenario()
     SESSIONS[sid] = {
         "id": sid, "scenario": req.scenario,
         "heat": req.scenario.get("heat", 0),
         "clocks": req.scenario.get("clocks", {}),
         "flags": [], "log": [], "turn": 0, "threat": None,
         "order": [p["name"] for p in req.players],
-        "players": req.players, "npcs": req.scenario.get("npcs", [])}
+        "players": req.players, "npcs": req.scenario.get("npcs", []),
+        **base,
+    }
     return {"id": sid, "state": SESSIONS[sid]}
 
 
@@ -237,25 +281,60 @@ def act(sid: str, req: ActionIn):
     prev = "\n".join(f"{lg['player']}: {lg['text']} => {lg['narration'][:180]}"
                      for lg in st["log"][-2:])
 
+
+    act_type = st.get("act", "fixer")
+    act_ctx = {
+        "fixer": (f"АКТ 1 (ТОРГ С ФИКСЕРОМ): раунд {st.get('fixer_round', 0)}, "
+                  f"patience {st.get('patience', 4)}, контракт {st.get('contract', {})}"),
+        "recon": (f"АКТ 2 (РЕКОГНОСЦИРОВКА): слоты {st.get('recon_slots', 0)}, "
+                  f"assets {st.get('assets', [])}"),
+        "infiltration": (f"АКТ 3 (ПРОНИКНОВЕНИЕ): suspicion {st.get('suspicion', 0)}, "
+                         f"lockdown {st.get('lockdown', 0)}/6, assets {st.get('assets', [])}"),
+    }.get(act_type, "")
+
+    outcome = "УСПЕХ" if mech["success"] else "ПРОВАЛ"
+    facts = json.dumps(mech, ensure_ascii=False)
+    cons = consequences(mech)
+    flavor = SEARCH.search(scene.split(".")[0] + " район банды техника", k=2)
+    fctx = "\n".join(f"[{m['crumb']}] {m['text'][:250]}" for m in flavor)
+    prev = "\n".join(f"{lg['player']}: {lg['text']} => {lg['narration'][:180]}"
+                     for lg in st["log"][-2:])
+
     user_msg = (
-        f"СЦЕНА: {scene}\nNPC в сцене: {npc_lines}\nHeat: {st['heat']}, флаги: {st['flags']}\n"
+        f"СЦЕНА: {scene}\n{act_ctx}\nNPC в сцене: {npc_lines}\nHeat: {st['heat']}, флаги: {st['flags']}\n"
         f"ПЕРСОНАЖ ИГРОКА: {actor['name']} ({actor['role']})\n"
         f"ЗАЯВЛЕНОЕ ДЕЙСТВИЕ: {req.text}\n"
         f"СМЫСЛ ДЕЙСТВИЯ: {ACTION_LABEL.get(mech.get('action_type'), 'действие')}\n"
         f"ФАКТЫ БРОСКА: {facts}\nРЕЗУЛЬТАТ: {outcome}\n"
         f"ПОСЛЕДСТВИЯ (обязательно соблюдать):\n{cons}\n"
         + (f"ПРЕДЫДУЩИЕ ХОДЫ:\n{prev}\n" if prev else "")
-        + f"ПРАВИЛА (справочно):\n{ctx}\nЛОР (только названия и детали):\n{fctx}")
+        + f"ПРАВИЛА (справочно):\n{ctx}\nЛОР (только названия и детали):\n{fctx}"
+    )
+
+    user_msg = (
+        f"СЦЕНА: {scene}\n{act_ctx}\nNPC в сцене: {npc_lines}\nHeat: {st['heat']}, флаги: {st['flags']}\n"
+        f"ПЕРСОНАЖ ИГРОКА: {actor['name']} ({actor['role']})\n"
+        f"ЗАЯВЛЕНОЕ ДЕЙСТВИЕ: {req.text}\n"
+        f"СМЫСЛ ДЕЙСТВИЯ: {ACTION_LABEL.get(mech.get('action_type'), 'действие')}\n"
+        f"ФАКТЫ БРОСКА: {facts}\nРЕЗУЛЬТАТ: {outcome}\n"
+        f"ПОСЛЕДСТВИЯ (обязательно соблюдать):\n{cons}\n"
+        + (f"ПРЕДЫДУЩИЕ ХОДЫ:\n{prev}\n" if prev else "")
+        + f"ПРАВИЛА (справочно):\n{ctx}\nЛОР (только названия и детали):\n{fctx}"
+    )
+
+    narr_sys = {"fixer": NARR_SYS_FIXER,
+                "recon": NARR_SYS_RECON,
+                "infiltration": NARR_SYS_INFILTRATION}.get(act_type, NARR_SYS)
 
     reply = chat_json([
-        {"role": "system", "content": NARR_SYS},
+        {"role": "system", "content": narr_sys},
         {"role": "user", "content": user_msg}
     ], model=NARR_MODEL, temperature=0.6)
 
     raw_n = reply.get("narration", "")
     if CJK.search(raw_n) or len(clean(raw_n)) < 40:
         reply = chat_json([
-            {"role": "system", "content": NARR_SYS},
+            {"role": "system", "content": narr_sys},
             {"role": "user", "content": user_msg}
         ], model=NARR_MODEL, temperature=0.4)
 

@@ -212,9 +212,10 @@ function renderStats() {
   const g = document.getElementById('statsGrid');
   g.innerHTML = '';
   for (const s of STATS) {
+    if (draft.stats[s] === undefined) draft.stats[s] = 2;
     const box = document.createElement('div');
     box.className = 'stat-box';
-    box.innerHTML = `<label>${s}</label><input type="number" min="2" max="8" value="${draft.stats[s]||2}">`;
+    box.innerHTML = `<label>${s}</label><input type="number" min="2" max="8" value="${draft.stats[s]}">`;
     box.querySelector('input').onchange = (e) => {
       draft.stats[s] = parseInt(e.target.value)||2;
       updatePool();
@@ -361,8 +362,10 @@ async function startGame() {
   // Валидация
   for (let i=0; i<2; i++) {
     const p = players[i];
+    const normStats = {};
+    for (const s of STATS) normStats[s] = p.stats[s] || 2;
     const body = {
-      name: p.name, role: p.role, stats: p.stats,
+      name: p.name, role: p.role, stats: normStats,
       skills: {...p.career, ...Object.fromEntries(p.pickups.map(x=>[x.skill, x.rank]))},
       lifepath: p.lifepath
     };
@@ -381,7 +384,7 @@ async function startGame() {
     if (p.hp) { full = p; }
     else {
       full = {
-        name: p.name, role: p.role, stats: p.stats,
+        name: p.name, role: p.role, stats: normStats,
         skills: {...p.career, ...Object.fromEntries(p.pickups.map(x=>[x.skill, x.rank]))},
         hp: (p.stats.BODY||4)*2, max_hp: (p.stats.BODY||4)*2,
         wound: "unharmed", dsp: 0, dead: false,

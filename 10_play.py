@@ -7,20 +7,18 @@ API = "http://localhost:8000"
 
 # ============ КОНФИГ ============
 
+# В 10_play.py замени SCENARIO на:
 SCENARIO = {
-    "scene": ("Ржавый рынок, Ночной Город, 02:14. Под эстакадой гудит чёрный рынок: "
-              "краденые импланты, дроны, синтетическая лапша. Где-то между рядами прячется "
-              "курьер с нейрофлешкой, которую хочет получить фиксер Кесслер."),
+    "scene": ("Бар 'Ржавый болт', Ночной Город, 23:40. За угловым столом среди дыма "
+              "и неоновых бликов сидит фиксер Кесслер и ждёт тебя. На столе — стакан "
+              "синтетического виски и дата-планшет с контрактом."),
     "heat": 1,
-    "clocks": {"security_response": {"max": 6, "progress": 1}},
+    "clocks": {},
     "npcs": [
-        {"id": "courier", "name": "Курьер", "hp": 20, "max_hp": 20,
-         "wound": "unharmed", "armor": "leathers"},
-        {"id": "guard1", "name": "Охранник рынка", "hp": 24, "max_hp": 24,
-         "wound": "unharmed", "armor": "kevlar"}
-    ]
+        {"id": "kessler", "name": "Фиксер Кесслер", "hp": 15, "max_hp": 15,
+         "wound": "unharmed", "armor": "leathers"}
+    ],
 }
-
 
 # ============ СОЗДАНИЕ ПЕРСОНАЖА ============
 
@@ -244,7 +242,15 @@ def make_players(mode="interactive"):
 
 def show_state(st):
     print("=" * 70)
-    print(f"HEAT {st['heat']} | clocks {st['clocks']} | flags {st['flags']}")
+    act = st.get("act", "fixer")
+    print(f"АКТ: {act.upper()} | HEAT {st['heat']}")
+    if act == "fixer":
+        print(f"Patience: {st.get('patience', 4)} | Раунд: {st.get('fixer_round', 0)}")
+    elif act == "recon":
+        print(f"Слоты времени: {st.get('recon_slots', 0)} | Assets: {st.get('assets', [])}")
+    elif act == "infiltration":
+        print(f"Suspicion: {st.get('suspicion', 0)} | Lockdown: {st.get('lockdown', 0)}/6")
+    print(f"Контракт: {st.get('contract', {})}")
     for p in st["players"]:
         print(f"  {p['name']} [{p['role']}] HP {p['hp']}/{p['max_hp']} {p.get('wound', '')}")
     for n in st.get("npcs", []):
