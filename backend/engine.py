@@ -30,6 +30,47 @@ SKILL_STAT = {
     "streetwise": "INT", "first_aid": "INT", "paramedic": "TECH",
 }
 
+SKILL_STAT.update({
+    # INT
+    "accounting": "INT", "conceal_reveal_object": "INT", "criminology": "INT",
+    "cryptography": "INT", "deduction": "INT", "education": "INT",
+    "gamble": "INT", "language": "INT", "library_search": "INT",
+    "lip_reading": "INT", "local_expert": "INT", "perception": "INT",
+    "science": "INT", "tactics": "INT", "tracking": "INT",
+    "wilderness_survival": "INT", "interface": "INT", "programming": "INT",
+    
+    # REF
+    "brawling": "REF", "contortionist": "REF", "dance": "REF",
+    "drive_land_vehicle": "REF", "drive_sea_vehicle": "REF", "evasion": "REF",
+    "handgun": "REF", "heavy_weapons": "REF", "martial_arts": "REF",
+    "melee_weapon": "REF", "pilot_air_vehicle": "REF", "pilot_sea_vehicle": "REF",
+    "riding": "REF", "shoulder_arms": "REF", "stealth": "REF",
+    
+    # TECH
+    "air_vehicle_tech": "TECH", "basic_tech": "TECH", "cybertech": "TECH",
+    "demolitions": "TECH", "electronics_security_tech": "TECH", "first_aid": "TECH",
+    "forgery": "TECH", "land_vehicle_tech": "TECH", "paint_draw_photography": "TECH",
+    "paramedic": "TECH", "pharmaceuticals": "TECH", "pick_lock": "TECH",
+    "pick_pocket": "TECH", "sea_vehicle_tech": "TECH", "weaponstech": "TECH",
+    
+    # COOL
+    "acting": "COOL", "bribery": "COOL", "conversation": "COOL",
+    "human_perception": "COOL", "interrogation": "COOL", "persuasion": "COOL",
+    "personal_grooming": "COOL", "streetwise": "COOL", "trading": "COOL",
+    "wardrobe_style": "COOL",
+    
+    # EMP
+    "performance": "EMP",
+    
+    # WILL
+    "concentration": "WILL", "endurance": "WILL", "resist_torture_drugs": "WILL",
+    
+    # BODY
+    "athletics": "BODY",
+    
+    # MOVE
+    "stealth_move": "MOVE",
+})
 
 def roll_d10():
     first = random.randint(1, 10)
@@ -88,6 +129,15 @@ def death_save(target):
 
 
 def resolve_check(state, actor, judge):
+    # Free-действия: без броска
+    if judge.get("action_type") == "free":
+        return {
+            "dice": None, "die_total": None, "stat": None, "skill": None,
+            "mods": 0, "total": None, "dv": None, "success": True,
+            "margin": 0, "critical": False, "fumble": False,
+            "actor": actor["name"], "action_type": "free",
+            "skill": "", "stat_key": None, "dv_key": None, "no_roll": True,
+        }
     dv_key = judge.get("dv_key", "everyday")
     dv = judge.get("dv") or DV.get(dv_key, 13)
     skill = judge.get("skill") or ""

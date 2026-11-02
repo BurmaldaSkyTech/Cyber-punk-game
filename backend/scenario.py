@@ -24,7 +24,7 @@ FIXER_TRADE_OPTIONS = [
     {"id": "heat_reduce", "label": "Старт suspicion -1", "effect": {"suspicion_start": -1}},
 ]
 
-FIXER_DV_SCALING = [13, 15, 17]  # DV для раундов 1, 2, 3
+FIXER_DV_SCALING = [13, 15, 17]
 
 # === АКТ 2: РЕКОГНОСЦИРОВКА ===
 
@@ -32,16 +32,16 @@ RECON_CHECKS = [
     {"id": "blind_spot", "skill": "perception", "stat": "INT", "dv": 13,
      "desc": "Осмотреть территорию на слепые зоны камер"},
     {"id": "patrol_schedule", "skill": "deduction", "stat": "INT", "dv": 15,
-     "desc": "Вычислить расписание патрулей по следам и мусору"},
+     "desc": "Вычислить расписание патрулей"},
     {"id": "inside_contact", "skill": "streetwise", "stat": "INT", "dv": 15,
-     "desc": "Найти уборщика, который откроет служебную дверь"},
+     "desc": "Найти контакт внутри"},
     {"id": "cam_loop", "skill": "interface", "stat": "INT", "dv": 17,
      "desc": "Взломать камеры: петли по 30 секунд"},
     {"id": "code_lock", "skill": "basic_tech", "stat": "TECH", "dv": 15,
      "desc": "Подобрать код служебного входа"},
 ]
 
-RECON_TIME_SLOTS = 3  # 3 проверки максимум
+RECON_TIME_SLOTS = 3
 
 # === АКТ 3: ПРОНИКНОВЕНИЕ ===
 
@@ -57,7 +57,6 @@ SERGEANT_ARMOR = "heavy_armorjack"
 
 INFILTRATION_OBJECTIVE = "Крио-капсула с имплантом 'Лазарь'"
 
-# Пути проникновения
 INFILTRATION_PATHS = {
     "stealth": {
         "name": "Скрытный путь",
@@ -70,7 +69,7 @@ INFILTRATION_PATHS = {
     },
     "tech": {
         "name": "Технический путь",
-        "skill": "electronics", "stat": "TECH",
+        "skill": "electronics_security_tech", "stat": "TECH",
         "base_dv": 15,
         "modifiers": {"code_lock": -4, "cam_loop": -3}
     },
@@ -89,8 +88,8 @@ INFILTRATION_PATHS = {
     }
 }
 
-EXTRACTION_DV = 15  # paramedic check
-EXTRACTION_MODIFIER = {"medkit": -2}  # с аптечкой легче
+EXTRACTION_DV = 15
+EXTRACTION_MODIFIER = {"medkit": -2}
 
 
 def get_act(st):
@@ -99,16 +98,12 @@ def get_act(st):
 
 
 def advance_act(st):
-    """Переход к следующему акту."""
+    """Переход к следующему акту (вызывается из main.py при триггерах)."""
     current = st.get("act", "fixer")
     if current == "fixer":
         st["act"] = "recon"
-        st["recon_slots"] = RECON_TIME_SLOTS
-        st["assets"] = []
     elif current == "recon":
         st["act"] = "infiltration"
-        st["suspicion"] = st.get("suspicion", 0)
-        st["lockdown"] = 0
     else:
         st["act"] = "complete"
 
@@ -132,7 +127,7 @@ def fixer_trade(st, action_text):
     round_num = st.get("fixer_round", 0)
     if round_num >= 3:
         return {"success": False, "reason": "Торг окончен", "next": "advance_act"}
-    
+
     dv = FIXER_DV_SCALING[min(round_num, len(FIXER_DV_SCALING)-1)]
     return {
         "action_type": "social",
@@ -155,7 +150,7 @@ def fixer_resolve(st, success):
     else:
         st["patience"] = st.get("patience", 4) - 1
         if st["patience"] <= 0:
-            return {"success": False, "message": "Кесслер теряет терпение, фиксирует базовые условия", "next": "advance_act"}
+            return {"success": False, "message": "Кесслер теряет терпение", "next": "advance_act"}
         return {"success": False, "message": f"Кесслер недоволен (patience: {st['patience']})"}
 
 
@@ -164,10 +159,8 @@ def recon_check(st, check_id):
     check = next((c for c in RECON_CHECKS if c["id"] == check_id), None)
     if not check:
         return {"error": "Неизвестная проверка"}
-    
     if st.get("recon_slots", 0) <= 0:
         return {"error": "Время вышло"}
-    
     st["recon_slots"] -= 1
     return {
         "action_type": "skill",
@@ -195,12 +188,10 @@ def infiltration_path(st, path_id):
     path = INFILTRATION_PATHS.get(path_id)
     if not path:
         return {"error": "Неизвестный путь"}
-    
     dv = path["base_dv"]
     for asset, mod in path["modifiers"].items():
         if asset in st.get("assets", []):
             dv += mod
-    
     return {
         "action_type": "skill",
         "skill": path["skill"],
@@ -217,7 +208,6 @@ def extraction_check(st):
     for asset, mod in EXTRACTION_MODIFIER.items():
         if asset in st.get("assets", []):
             dv += mod
-    
     return {
         "action_type": "skill",
         "skill": "paramedic",

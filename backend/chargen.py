@@ -6,6 +6,22 @@ Lifepath: серия бросков 2d6 по таблицам
 Starting gear: по роли"""
 import random
 
+import json
+from pathlib import Path
+
+# Загружаем Lifepath таблицы
+_lifepath_path = Path(__file__).parent.parent / "data" / "normalized" / "lifepath_tables.json"
+print(f"[DEBUG] Lifepath path: {_lifepath_path}")
+print(f"[DEBUG] File exists: {_lifepath_path.exists()}")
+if _lifepath_path.exists():
+    with open(_lifepath_path, encoding="utf-8") as f:
+        LIFEPATH_DATA = json.load(f)
+    print(f"[DEBUG] Loaded {len(LIFEPATH_DATA.get('general', {}))} general tables")
+    print(f"[DEBUG] Loaded {len(LIFEPATH_DATA.get('role_specific', {}))} role-specific tables")
+else:
+    LIFEPATH_DATA = {"general": {}, "role_specific": {}}
+    print("[DEBUG] WARNING: lifepath_tables.json not found!")
+
 STATS = ["INT", "REF", "DEX", "TECH", "COOL", "WILL", "LUCK", "MOVE", "BODY", "EMP"]
 STAT_MIN, STAT_MAX, STAT_POOL = 2, 8, 62
 CAREER_START = 2
@@ -16,18 +32,48 @@ STARTING_EB = {"Rockerboy": 1500, "Solo": 1800, "Netrunner": 1500, "Tech": 1700,
                "Nomad": 1000, "Fixer": 2500}
 
 SKILLS = {
-    "athletics": "BODY", "melee": "DEX", "evasion": "DEX", "stealth": "DEX",
-    "contortionist": "DEX", "dance": "DEX", "drive": "REF", "pilot": "REF",
-    "handgun": "REF", "shoulder_arms": "REF", "autofire": "REF",
-    "perception": "INT", "deduction": "INT", "library_search": "INT",
-    "criminology": "INT", "streetwise": "INT", "first_aid": "INT",
-    "tactics": "INT", "interface": "INT", "programming": "TECH",
-    "electronics": "TECH", "basic_tech": "TECH", "cybertech": "TECH",
-    "weaponstech": "TECH", "land_vehicle_tech": "TECH", "paramedic": "TECH",
-    "pharmaceuticals": "TECH",
-    "persuasion": "EMP", "conversation": "EMP", "human_perception": "EMP",
-    "performance": "COOL", "acting": "COOL", "trading": "COOL",
-    "concentration": "WILL",
+    # INT-based (16)
+    "accounting": "INT", "conceal_reveal_object": "INT", "criminology": "INT",
+    "cryptography": "INT", "deduction": "INT", "education": "INT",
+    "gamble": "INT", "language": "INT", "library_search": "INT",
+    "lip_reading": "INT", "local_expert": "INT", "perception": "INT",
+    "science": "INT", "tactics": "INT", "tracking": "INT",
+    "wilderness_survival": "INT",
+    
+    # REF-based (15)
+    "brawling": "REF", "contortionist": "REF", "dance": "REF",
+    "drive_land_vehicle": "REF", "drive_sea_vehicle": "REF", "evasion": "REF",
+    "handgun": "REF", "heavy_weapons": "REF", "martial_arts": "REF",
+    "melee_weapon": "REF", "pilot_air_vehicle": "REF", "pilot_sea_vehicle": "REF",
+    "riding": "REF", "shoulder_arms": "REF", "stealth": "REF",
+    
+    # TECH-based (15)
+    "air_vehicle_tech": "TECH", "basic_tech": "TECH", "cybertech": "TECH",
+    "demolitions": "TECH", "electronics_security_tech": "TECH", "first_aid": "TECH",
+    "forgery": "TECH", "land_vehicle_tech": "TECH", "paint_draw_photography": "TECH",
+    "paramedic": "TECH", "pharmaceuticals": "TECH", "pick_lock": "TECH",
+    "pick_pocket": "TECH", "sea_vehicle_tech": "TECH", "weaponstech": "TECH",
+    
+    # COOL-based (10)
+    "acting": "COOL", "bribery": "COOL", "conversation": "COOL",
+    "human_perception": "COOL", "interrogation": "COOL", "persuasion": "COOL",
+    "personal_grooming": "COOL", "streetwise": "COOL", "trading": "COOL",
+    "wardrobe_style": "COOL",
+    
+    # EMP-based (1)
+    "performance": "EMP",
+    
+    # WILL-based (3)
+    "concentration": "WILL", "endurance": "WILL", "resist_torture_drugs": "WILL",
+    
+    # BODY-based (1)
+    "athletics": "BODY",
+    
+    # MOVE-based (1) — альтернативный стат для stealth
+    "stealth_move": "MOVE",
+    
+    # Netrunner special (2)
+    "interface": "INT", "programming": "INT",
 }
 
 ROLES = {
@@ -37,17 +83,17 @@ ROLES = {
                   "items": ["electric guitar", "amp drone", "stylish clothes"],
                   "starting_cyberware": ["Neural Link", "Basic Cyberaudio"]},
     "Solo": {"ability": "Combat Awareness",
-             "career": ["handgun", "melee", "evasion", "athletics"],
+             "career": ["handgun", "melee_weapon", "evasion", "athletics"],
              "weapon": "heavy_pistol", "armor": "light_armorjack",
              "items": ["combat knife", "armored jacket"],
              "starting_cyberware": ["Neural Link", "Basic Cyberoptic"]},
     "Netrunner": {"ability": "Interface",
-                  "career": ["interface", "programming", "electronics", "perception"],
+                  "career": ["interface", "programming", "electronics_security_tech", "perception"],
                   "weapon": "medium_pistol", "armor": "leathers",
                   "items": ["cyberdeck", "agent", "interface plugs"],
                   "starting_cyberware": ["Neural Link", "Interface Plugs"]},
     "Tech": {"ability": "Maker",
-             "career": ["basic_tech", "electronics", "cybertech", "weaponstech"],
+             "career": ["basic_tech", "electronics_security_tech", "cybertech", "weaponstech"],
              "weapon": "medium_pistol", "armor": "leathers",
              "items": ["toolkit", "techhair", "tech goggles"],
              "starting_cyberware": ["Neural Link", "Basic Cyberaudio"]},
@@ -57,7 +103,7 @@ ROLES = {
                 "items": ["medscanner", "trauma bag", "airhypo"],
                 "starting_cyberware": ["Neural Link", "Basic Cyberaudio"]},
     "Media": {"ability": "Credibility",
-              "career": ["deduction", "library_search", "persuasion", "acting"],
+              "career": ["deduction", "library_search", "persuasion", "education"],
               "weapon": "medium_pistol", "armor": "leathers",
               "items": ["recorder drone", "press badge", "camera"],
               "starting_cyberware": ["Neural Link", "Basic Cyberoptic"]},
@@ -72,7 +118,7 @@ ROLES = {
              "items": ["corpo badge", "credit chip", "corporate suit"],
              "starting_cyberware": ["Neural Link", "Basic Cyberaudio"]},
     "Nomad": {"ability": "Moto",
-              "career": ["drive", "land_vehicle_tech", "athletics", "perception"],
+              "career": ["drive_land_vehicle", "land_vehicle_tech", "endurance", "perception"],
               "weapon": "shoulder_arms", "armor": "kevlar",
               "items": ["roadbike keys", "tent", "road leathers"],
               "starting_cyberware": ["Neural Link", "Basic Cyberoptic"]},
@@ -177,10 +223,24 @@ def random_character(rng=None, role=None, seed=None):
     role = role or rng.choice(list(ROLES))
     stats = _alloc_stats(rng)
     skills = _alloc_skills(rng, role)
-    lifepath = _roll_lifepath(rng)
     name = rng.choice(HANDLES)
     role_data = ROLES[role]
-    
+
+    # 1. Старые 4 таблицы (броски 2d6 из LIFEPATH_TABLES внутри chargen)
+    lifepath = _roll_lifepath(rng)
+
+    # 2. Новые general-таблицы из lifepath_tables.json
+    general = LIFEPATH_DATA.get("general", {})
+    for key, options in general.items():
+        if options and key not in lifepath:
+            lifepath[key] = rng.choice(options)
+
+    # 3. Role-specific таблицы из JSON
+    role_lp = LIFEPATH_DATA.get("role_specific", {}).get(role, {})
+    for key, options in role_lp.items():
+        if options:
+            lifepath[f"role_{key}"] = rng.choice(options)
+
     ch = {
         "name": name, "role": role,
         "stats": stats, "skills": skills,

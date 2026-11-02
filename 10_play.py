@@ -1,13 +1,8 @@
 # 10_play.py
 import requests
-import json
 
 API = "http://localhost:8000"
 
-
-# ============ КОНФИГ ============
-
-# В 10_play.py замени SCENARIO на:
 SCENARIO = {
     "scene": ("Бар 'Ржавый болт', Ночной Город, 23:40. За угловым столом среди дыма "
               "и неоновых бликов сидит фиксер Кесслер и ждёт тебя. На столе — стакан "
@@ -20,47 +15,104 @@ SCENARIO = {
     ],
 }
 
+CAREER_SKILLS = {
+    "Rockerboy": ["performance", "persuasion", "human_perception", "acting"],
+    "Solo": ["handgun", "melee_weapon", "evasion", "athletics"],
+    "Netrunner": ["interface", "programming", "electronics_security_tech", "perception"],
+    "Tech": ["basic_tech", "electronics_security_tech", "cybertech", "weaponstech"],
+    "Medtech": ["paramedic", "first_aid", "pharmaceuticals", "human_perception"],
+    "Media": ["deduction", "library_search", "persuasion", "education"],
+    "Lawman": ["handgun", "perception", "deduction", "criminology"],
+    "Exec": ["persuasion", "conversation", "deduction", "trading"],
+    "Nomad": ["drive_land_vehicle", "land_vehicle_tech", "endurance", "perception"],
+    "Fixer": ["streetwise", "persuasion", "conversation", "trading"],
+}
+
+ALL_SKILLS = [
+    # INT (16)
+    "accounting", "conceal_reveal_object", "criminology", "cryptography",
+    "deduction", "education", "gamble", "language", "library_search",
+    "lip_reading", "local_expert", "perception", "science", "tactics",
+    "tracking", "wilderness_survival",
+    # REF (15)
+    "brawling", "contortionist", "dance", "drive_land_vehicle",
+    "drive_sea_vehicle", "evasion", "handgun", "heavy_weapons",
+    "martial_arts", "melee_weapon", "pilot_air_vehicle",
+    "pilot_sea_vehicle", "riding", "shoulder_arms", "stealth",
+    # TECH (15)
+    "air_vehicle_tech", "basic_tech", "cybertech", "demolitions",
+    "electronics_security_tech", "first_aid", "forgery",
+    "land_vehicle_tech", "paint_draw_photography", "paramedic",
+    "pharmaceuticals", "pick_lock", "pick_pocket", "sea_vehicle_tech",
+    "weaponstech",
+    # COOL (10)
+    "acting", "bribery", "conversation", "human_perception",
+    "interrogation", "persuasion", "personal_grooming", "streetwise",
+    "trading", "wardrobe_style",
+    # EMP (1)
+    "performance",
+    # WILL (3)
+    "concentration", "endurance", "resist_torture_drugs",
+    # BODY (1)
+    "athletics",
+    # MOVE (1)
+    "stealth_move",
+    # Netrunner (2)
+    "interface", "programming",
+]
+
+LIFEPATH_TABLES = {
+    "cultural_origins": ["North American", "South American", "Western European",
+                         "Eastern European", "Middle Eastern", "North African",
+                         "Sub-Saharan African", "South Asian", "Southeast Asian",
+                         "East Asian", "Oceania/Pacific"],
+    "family_background": ["Corporate Elite", "Corporate Manager", "Corporate Worker",
+                          "Nomad Clan", "Gang family", "Urban Homeless",
+                          "Rural Family Farm", "Military family", "Law Enforcement family",
+                          "Entertainment family", "Criminal family"],
+    "childhood_environment": ["The Street", "War Zone", "Nomad pack",
+                              "Gang-controlled district", "Urban slums", "Suburban sprawl",
+                              "Corporate housing block", "Rural wasteland",
+                              "Space station / orbital", "Secure corporate arcology",
+                              "Military base"],
+    "family_crisis": ["Family destroyed by war", "Family imprisoned", "Family bankrupt",
+                      "Family killed by gang", "Family member killed by corporation",
+                      "Family split apart", "Family member went missing",
+                      "Family member betrayed you", "Family member became cyberpsycho",
+                      "Family exiled you", "No crisis — stable childhood"],
+}
+
+
 # ============ СОЗДАНИЕ ПЕРСОНАЖА ============
 
 def choose_role():
     print("\n=== ВЫБОР РОЛИ ===")
-    roles = ["Rockerboy", "Solo", "Netrunner", "Tech", "Medtech",
-             "Media", "Lawman", "Exec", "Nomad", "Fixer"]
+    roles = list(CAREER_SKILLS.keys())
     for i, r in enumerate(roles, 1):
         print(f"  {i}. {r}")
     while True:
         s = input("Введи номер (1-10): ").strip()
-        if s.isdigit() and 1 <= int(s) <= 10:
+        if s.isdigit() and 1 <= int(s) <= len(roles):
             return roles[int(s) - 1]
         print("Неверный номер")
 
 
 def distribute_stats():
     print("\n=== РАСПРЕДЕЛЕНИЕ СТАТОВ (62 очка, каждая 2..8) ===")
-    print("Введи значение для каждой характеристики (2..8):")
     stats_list = ["INT", "REF", "DEX", "TECH", "COOL", "WILL", "LUCK", "MOVE", "BODY", "EMP"]
-    stats = {}
     while True:
-        total = sum(stats.values())
-        print(f"\nОсталось раздать: {62 - total}")
+        stats = {}
         for s in stats_list:
-            v = stats.get(s)
-            while v is None:
+            while True:
                 raw = input(f"  {s} (2..8): ").strip()
                 if raw.isdigit() and 2 <= int(raw) <= 8:
-                    v = int(raw)
-                else:
-                    print("    Введи число от 2 до 8")
-            stats[s] = v
+                    stats[s] = int(raw)
+                    break
+                print("    Введи число от 2 до 8")
         total = sum(stats.values())
         if total == 62:
-            break
-        elif total < 62:
-            print(f"\nСумма {total}, нужно 62. У тебя осталось {62 - total}. Начнём заново.")
-        else:
-            print(f"\nСумма {total}, превышение на {total - 62}. Начнём заново.")
-        stats = {}
-    return stats
+            return stats
+        print(f"\nСумма {total}, нужно 62. Начнём заново.\n")
 
 
 def choose_lifepath():
@@ -70,44 +122,22 @@ def choose_lifepath():
         if s in ("1", "2"):
             break
     mode = "manual" if s == "1" else "roll"
-
-    tables = {
-        "cultural_origins": ["North American", "South American", "Western European",
-                              "Eastern European", "Middle Eastern", "North African",
-                              "Sub-Saharan African", "South Asian", "Southeast Asian",
-                              "East Asian", "Oceania/Pacific"],
-        "family_background": ["Corporate Elite", "Corporate Manager", "Corporate Worker",
-                               "Nomad Clan", "Gang family", "Urban Homeless",
-                               "Rural Family Farm", "Military family", "Law Enforcement family",
-                               "Entertainment family", "Criminal family"],
-        "childhood_environment": ["The Street", "War Zone", "Nomad pack",
-                                   "Gang-controlled district", "Urban slums", "Suburban sprawl",
-                                   "Corporate housing block", "Rural wasteland",
-                                   "Space station / orbital", "Secure corporate arcology", "Military base"],
-        "family_crisis": ["Family destroyed by war", "Family imprisoned", "Family bankrupt",
-                           "Family killed by gang", "Family member killed by corporation",
-                           "Family split apart", "Family member went missing",
-                           "Family member betrayed you", "Family member became cyberpsycho",
-                           "Family exiled you", "No crisis — stable childhood"],
-    }
-
+    import random as _rnd
     lifepath = {}
-    for key, options in tables.items():
+    for key, options in LIFEPATH_TABLES.items():
         if mode == "roll":
-            # 2d6 -> индекс (2..12 -> 0..10)
-            d1, d2 = __import__("random").randint(1, 6), __import__("random").randint(1, 6)
-            idx = d1 + d2 - 2
-            choice = options[idx]
-            print(f"\n  {key}: брошено {d1}+{d2}={d1+d2} → {choice}")
-            lifepath[key] = choice
+            d1, d2 = _rnd.randint(1, 6), _rnd.randint(1, 6)
+            idx = min(d1 + d2 - 2, len(options) - 1)
+            lifepath[key] = options[idx]
+            print(f"  {key}: брошено {d1}+{d2}={d1+d2} -> {options[idx]}")
         else:
-            print(f"\n  {key}:")
+            print(f"  {key}:")
             for i, o in enumerate(options, 1):
                 print(f"    {i}. {o}")
             while True:
-                s = input("  Выбор (1-11): ").strip()
-                if s.isdigit() and 1 <= int(s) <= len(options):
-                    lifepath[key] = options[int(s) - 1]
+                s2 = input("  Выбор: ").strip()
+                if s2.isdigit() and 1 <= int(s2) <= len(options):
+                    lifepath[key] = options[int(s2) - 1]
                     break
                 print("    Неверный номер")
     return lifepath
@@ -123,12 +153,12 @@ def distribute_skills(career_skills):
             if s in ("2", "3"):
                 skills[sk] = int(s)
                 break
-    print(f"\nДополнительные навыки (10 очков, максимум 6 на навык):")
-    print("Введи имя навыка и ранк (например: stealth 2). Пустая строка — завершить.")
-    print("Доступные навыки: athletics, melee, evasion, stealth, handgun, shoulder_arms,")
-    print("  perception, deduction, interface, programming, electronics, basic_tech,")
-    print("  persuasion, conversation, first_aid, paramedic, trading, ...")
-    print(f"\n  Осталось очков: 10")
+    pickup_available = [s for s in ALL_SKILLS if s not in career_skills]
+    print("\nДополнительные навыки (10 очков, максимум 6 на навык):")
+    print("Формат: <навык> <ранк>. Пустая строка — завершить.")
+    print("Доступные навыки (не карьерные):")
+    for i in range(0, len(pickup_available), 6):
+        print("  " + ", ".join(pickup_available[i:i+6]))
     pool = 10
     while pool > 0:
         raw = input(f"  [осталось {pool}] > ").strip().lower()
@@ -145,96 +175,60 @@ def distribute_skills(career_skills):
         if rank > pool:
             print(f"    Не хватает очков (осталось {pool})")
             continue
-        # Проверяем, что навык не карьерный
         if sk in career_skills:
-            print(f"    Навык {sk} уже карьерный (ранк {skills[sk]})")
+            print(f"    Навык {sk} уже карьерный (ранк {skills[sk]}) — pickup его не дублирует")
             continue
-        # Для pickup: максимальный ранк 6 (не суммируется с карьерным)
         current = skills.get(sk, 0)
-        new_val = current + rank
-        if new_val > 6:
-            print(f"    Превышен максимум (было {current}, +{rank} = {new_val})")
+        if current + rank > 6:
+            print(f"    Превышен максимум (было {current}, +{rank} = {current + rank})")
             continue
-        skills[sk] = new_val
+        skills[sk] = current + rank
         pool -= rank
     return skills
 
 
 def interactive_chargen():
-    """Полный wizard создания персонажа по правилам книги."""
     print("\n" + "=" * 70)
     print("   СОЗДАНИЕ ПЕРСОНАЖА (по правилам Cyberpunk RED)")
     print("=" * 70)
-
-    # Роль
     role = choose_role()
-    role_info = requests.post(f"{API}/chargen/roleinfo", json={"role": role}, timeout=10).json() \
-        if False else None  # пока не нужен отдельный эндпоинт
-    career_skills = {
-        "Rockerboy": ["performance", "persuasion", "human_perception", "acting"],
-        "Solo": ["handgun", "melee", "evasion", "athletics"],
-        "Netrunner": ["interface", "programming", "electronics", "perception"],
-        "Tech": ["basic_tech", "electronics", "cybertech", "weaponstech"],
-        "Medtech": ["paramedic", "first_aid", "pharmaceuticals", "human_perception"],
-        "Media": ["deduction", "library_search", "persuasion", "acting"],
-        "Lawman": ["handgun", "perception", "deduction", "criminology"],
-        "Exec": ["persuasion", "conversation", "deduction", "trading"],
-        "Nomad": ["drive", "land_vehicle_tech", "athletics", "perception"],
-        "Fixer": ["streetwise", "persuasion", "conversation", "trading"],
-    }[role]
-    print(f"\nРоль: {role} | Карьерные навыки: {', '.join(career_skills)}")
-
-    # Статы
+    career = CAREER_SKILLS[role]
+    print(f"\nРоль: {role} | Карьерные навыки: {', '.join(career)}")
     stats = distribute_stats()
-
-    # Lifepath
     lifepath = choose_lifepath()
-
-    # Навыки
-    skills = distribute_skills(career_skills)
-
-    # Имя и стиль
+    skills = distribute_skills(career)
     name = input("\nИмя/хэндл: ").strip() or "Чоум"
     style = input("Визуальная деталь (или Enter): ").strip()
-
-    # Собираем персонажа
     ch = {
-        "name": name, "role": role,
-        "stats": stats, "skills": skills,
+        "name": name, "role": role, "stats": stats, "skills": skills,
         "hp": stats["BODY"] * 2, "max_hp": stats["BODY"] * 2,
         "wound": "unharmed", "dsp": 0, "dead": False,
-        "humanity": stats["EMP"] * 10,
-        "lifepath": lifepath,
+        "humanity": stats["EMP"] * 10, "lifepath": lifepath,
     }
     if style:
         ch["style"] = style
-
-    # Валидация на сервере
     resp = requests.post(f"{API}/chargen/validate", json=ch, timeout=10)
     v = resp.json()
     if not v["valid"]:
         print(f"\n[ошибка] Проблемы валидации: {v['problems']}")
-        print("Вернись и поправь, либо используй random.")
         return None
     return ch
 
 
 def make_players(mode="interactive"):
-    """Создаёт двух игроков. mode='interactive' — wizard, 'random' — авто."""
     players = []
-    if mode == "random":
-        for i in range(2):
+    for i in range(2):
+        if mode == "random":
             players.append(requests.post(f"{API}/chargen",
                                          json={"mode": "random"}, timeout=30).json())
-    else:
-        for i in range(2):
-            print(f"\n--- ИГРОК {i+1} ---")
-            ch = interactive_chargen()
-            if ch is None:
-                print("Откат на random для этого игрока...")
-                ch = requests.post(f"{API}/chargen",
-                                   json={"mode": "random"}, timeout=30).json()
-            players.append(ch)
+            continue
+        print(f"\n--- ИГРОК {i+1} ---")
+        ch = interactive_chargen()
+        if ch is None:
+            print("Откат на random для этого игрока...")
+            ch = requests.post(f"{API}/chargen",
+                               json={"mode": "random"}, timeout=30).json()
+        players.append(ch)
     return players
 
 
@@ -251,6 +245,10 @@ def show_state(st):
     elif act == "infiltration":
         print(f"Suspicion: {st.get('suspicion', 0)} | Lockdown: {st.get('lockdown', 0)}/6")
     print(f"Контракт: {st.get('contract', {})}")
+    if st.get("revealed_beats"):
+        print(f"  Раскрыто: {len(st['revealed_beats'])}/5 битов контракта")
+    if st.get("granted"):
+        print(f"  На руках: {', '.join(st['granted'])}")
     for p in st["players"]:
         print(f"  {p['name']} [{p['role']}] HP {p['hp']}/{p['max_hp']} {p.get('wound', '')}")
     for n in st.get("npcs", []):
@@ -260,15 +258,18 @@ def show_state(st):
 
 def show_result(r, sid):
     m = r.get("mechanics", {})
-    line = (f"[механика] {m.get('action_type', '?')} | "
-            f"{m.get('stat_key', '?')}+{m.get('skill', '?')}: "
-            f"{m.get('total')} vs DV{m.get('dv')} ({m.get('dv_key', '?')}) -> "
-            + ("УСПЕХ" if m.get("success") else "ПРОВАЛ"))
-    if m.get("damage") is not None:
-        line += (f" | цель {m.get('target')}: урон {m.get('damage')} "
-                 f"- SP{m.get('armor_sp')} = {m.get('net_damage')}")
-    if m.get("critical_injury"):
-        line += " | КРИТ-ТРАВМА"
+    if m.get("no_roll"):
+        line = f"[без броска] свободное действие: {m.get('actor', '')}"
+    else:
+        line = (f"[механика] {m.get('action_type', '?')} | "
+                f"{m.get('stat_key', '?')}+{m.get('skill', '?')}: "
+                f"{m.get('total')} vs DV{m.get('dv')} ({m.get('dv_key', '?')}) -> "
+                + ("УСПЕХ" if m.get("success") else "ПРОВАЛ"))
+        if m.get("damage") is not None:
+            line += (f" | цель {m.get('target')}: урон {m.get('damage')} "
+                     f"- SP{m.get('armor_sp')} = {m.get('net_damage')}")
+        if m.get("critical_injury"):
+            line += " | КРИТ-ТРАВМА"
     nr = m.get("npc_reaction")
     if nr:
         line += (f"\n[ответ NPC] {nr['npc']}: "
@@ -304,7 +305,6 @@ def show_result(r, sid):
 def main():
     print("   CYBERPUNK RED — текстовая настолка с ИИ")
     print("   ======================================\n")
-
     while True:
         m = input("Создание персонажа: интерактивно (1) / случайные (2)? ").strip()
         if m in ("1", "2"):
@@ -326,7 +326,6 @@ def main():
         raw = input(f"{actor}> ").strip()
         if not raw:
             continue
-
         if raw.lower().startswith("assist:"):
             rest = raw.split(":", 1)[1].strip()
             parts = rest.split(" ", 1)
@@ -335,7 +334,6 @@ def main():
             payload = {"player": actor, "text": text, "assist": helper}
         else:
             payload = {"player": actor, "text": raw}
-
         try:
             r = requests.post(f"{API}/session/{sid}/action",
                               json=payload, timeout=300).json()

@@ -132,14 +132,14 @@
 <script>
 const ROLES = {
   "Rockerboy": ["performance","persuasion","human_perception","acting"],
-  "Solo": ["handgun","melee","evasion","athletics"],
-  "Netrunner": ["interface","programming","electronics","perception"],
-  "Tech": ["basic_tech","electronics","cybertech","weaponstech"],
+  "Solo": ["handgun","melee_weapon","evasion","athletics"],
+  "Netrunner": ["interface","programming","electronics_security_tech","perception"],
+  "Tech": ["basic_tech","electronics_security_tech","cybertech","weaponstech"],
   "Medtech": ["paramedic","first_aid","pharmaceuticals","human_perception"],
-  "Media": ["deduction","library_search","persuasion","acting"],
+  "Media": ["deduction","library_search","persuasion","education"],
   "Lawman": ["handgun","perception","deduction","criminology"],
   "Exec": ["persuasion","conversation","deduction","trading"],
-  "Nomad": ["drive","land_vehicle_tech","athletics","perception"],
+  "Nomad": ["drive_land_vehicle","land_vehicle_tech","endurance","perception"],
   "Fixer": ["streetwise","persuasion","conversation","trading"]
 };
 const ROLE_DESC = {
@@ -149,11 +149,38 @@ const ROLE_DESC = {
 };
 const STATS = ["INT","REF","DEX","TECH","COOL","WILL","LUCK","MOVE","BODY","EMP"];
 const STAT_POOL = 62;
-const SKILLS = ["athletics","melee","evasion","stealth","contortionist","dance","drive","pilot",
-  "handgun","shoulder_arms","autofire","perception","deduction","library_search","criminology",
-  "streetwise","first_aid","tactics","interface","programming","electronics","basic_tech",
-  "cybertech","weaponstech","land_vehicle_tech","paramedic","pharmaceuticals",
-  "persuasion","conversation","human_perception","performance","acting","trading","concentration"];
+const SKILLS = [
+  // INT (16)
+  "accounting", "conceal_reveal_object", "criminology", "cryptography",
+  "deduction", "education", "gamble", "language", "library_search",
+  "lip_reading", "local_expert", "perception", "science", "tactics",
+  "tracking", "wilderness_survival",
+  // REF (15)
+  "brawling", "contortionist", "dance", "drive_land_vehicle",
+  "drive_sea_vehicle", "evasion", "handgun", "heavy_weapons",
+  "martial_arts", "melee_weapon", "pilot_air_vehicle",
+  "pilot_sea_vehicle", "riding", "shoulder_arms", "stealth",
+  // TECH (15)
+  "air_vehicle_tech", "basic_tech", "cybertech", "demolitions",
+  "electronics_security_tech", "first_aid", "forgery",
+  "land_vehicle_tech", "paint_draw_photography", "paramedic",
+  "pharmaceuticals", "pick_lock", "pick_pocket", "sea_vehicle_tech",
+  "weaponstech",
+  // COOL (10)
+  "acting", "bribery", "conversation", "human_perception",
+  "interrogation", "persuasion", "personal_grooming", "streetwise",
+  "trading", "wardrobe_style",
+  // EMP (1)
+  "performance",
+  // WILL (3)
+  "concentration", "endurance", "resist_torture_drugs",
+  // BODY (1)
+  "athletics",
+  // MOVE (1)
+  "stealth_move",
+  // Netrunner (2)
+  "interface", "programming"
+];
 const LIFEPATH = {
   "cultural_origins": ["North American","South American","Western European","Eastern European",
     "Middle Eastern","North African","Sub-Saharan African","South Asian","Southeast Asian","East Asian","Oceania/Pacific"],
@@ -351,66 +378,101 @@ function showSummary() {
 }
 
 async function startGame() {
-  // Если второй игрок не создан — генерим случайного
-  for (let i=0; i<2; i++) {
-    if (!players[i]) {
-      const r = await fetch('/chargen', {method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({mode:'random'})});
-      players[i] = await r.json();
+  const errBox = document.getElementById('startError');
+  errBox.classList.add('hidden');
+  try {
+    // Догенерировать отсутствующих игроков случайными
+    for (let i = 0; i < 2; i++) {
+      if (!players[i]) {
+        const r = await fetch('/chargen', {method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({mode:'random'})});
+        players[i] = await r.json();
+      }
     }
-  }
-  // Валидация
-  for (let i=0; i<2; i++) {
-    const p = players[i];
-    const normStats = {};
-    for (const s of STATS) normStats[s] = p.stats[s] || 2;
-    const body = {
-      name: p.name, role: p.role, stats: normStats,
-      skills: {...p.career, ...Object.fromEntries(p.pickups.map(x=>[x.skill, x.rank]))},
-      lifepath: p.lifepath
-    };
-    const v = await fetch('/chargen/validate', {method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify(body)}).then(r=>r.json());
-    if (!v.valid) {
-      document.getElementById('startError').textContent = `Игрок ${i+1}: ${v.problems.join('; ')}`;
-      document.getElementById('startError').classList.remove('hidden');
-      return;
-    }
-  }
-  // Собираем полных персонажей и создаём сессию
-  const fullPlayers = [];
-  for (const p of players) {
-    let full;
-    if (p.hp) { full = p; }
-    else {
-      full = {
-        name: p.name, role: p.role, stats: normStats,
-        skills: {...p.career, ...Object.fromEntries(p.pickups.map(x=>[x.skill, x.rank]))},
-        hp: (p.stats.BODY||4)*2, max_hp: (p.stats.BODY||4)*2,
-        wound: "unharmed", dsp: 0, dead: false,
-        humanity: (p.stats.EMP||4)*10, lifepath: p.lifepath
-      };
-    }
-    fullPlayers.push(full);
-  }
-  const scenario = {
-    scene: "Ржавый рынок, Ночной Город, 02:14. Под эстакадой гудит чёрный рынок: краденые импланты, дроны, синтетическая лапша. Где-то между рядами прячется курьер с нейрофлешкой, которую хочет получить фиксер Кесслер.",
-    heat: 1,
-    clocks: {security_response: {max: 6, progress: 1}},
-    npcs: [
-      {id:"courier", name:"Курьер", hp:20, max_hp:20, wound:"unharmed", armor:"leathers"},
-      {id:"guard1", name:"Охранник рынка", hp:24, max_hp:24, wound:"unharmed", armor:"kevlar"}
-    ]
-  };
-  const r = await fetch('/session', {method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({players: fullPlayers, scenario})});
-  const d = await r.json();
-  localStorage.setItem('sid', d.id);
-  window.location.href = '/';
-}
 
+    // Привести каждого к полному формату
+    const fullPlayers = [];
+    for (let i = 0; i < 2; i++) {
+      const p = players[i];
+      let full;
+      if (p.skills && p.hp !== undefined) {
+        full = p;  // уже полный (случайный)
+      } else {
+        const skills = Object.assign({}, p.career || {});
+        for (const pk of (p.pickups || [])) {
+          skills[pk.skill] = (skills[pk.skill] || 0) + pk.rank;
+        }
+        const stats = {};
+        for (const s of STATS) stats[s] = (p.stats && p.stats[s]) || 2;
+        full = {
+          name: p.name, role: p.role, stats: stats, skills: skills,
+          hp: stats.BODY * 2, max_hp: stats.BODY * 2,
+          wound: "unharmed", dsp: 0, dead: false,
+          humanity: stats.EMP * 10, lifepath: p.lifepath || {}
+        };
+      }
+      fullPlayers.push(full);
+    }
+
+    // Валидация полных персонажей
+    for (let i = 0; i < 2; i++) {
+      const v = await fetch('/chargen/validate', {method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(fullPlayers[i])}).then(r => r.json());
+      if (!v.valid) {
+        errBox.textContent = `Игрок ${i+1}: ${v.problems.join('; ')}`;
+        errBox.classList.remove('hidden');
+        return;
+      }
+    }
+
+    // Создание сессии
+    const scenario = {
+      scene: "Бар 'Ржавый болт', Ночной Город, 23:40. За угловым столом среди дыма и неоновых бликов сидит фиксер Кесслер и ждёт тебя. На столе — стакан синтетического виски и дата-планшет с контрактом.",
+      heat: 1,
+      clocks: {},
+      npcs: [
+        {id:"kessler", name:"Фиксер Кесслер", hp:15, max_hp:15, wound:"unharmed", armor:"leathers"}
+      ]
+    };
+    const r = await fetch('/session', {method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({players: fullPlayers, scenario: scenario})});
+    const d = await r.json();
+    localStorage.setItem('sid', d.id);
+    window.location.href = '/?sid=' + d.id;
+  } catch (e) {
+    errBox.textContent = 'Ошибка: ' + e.message;
+    errBox.classList.remove('hidden');
+    console.error(e);
+  }
+}
 // init
 renderAll();
+// === ВОССТАНОВЛЕНИЕ СЕССИИ ПРИ ЗАГРУЗКЕ ===
+window.addEventListener('load', async () => {
+  const sid = localStorage.getItem('sid');
+  if (!sid) return;  // нет сохранённой сессии — показываем блок выбора
+  try {
+    const r = await fetch(`/session/${sid}`);
+    if (!r.ok) {
+      localStorage.removeItem('sid');  // сессия мертва (сервер перезапускался)
+      return;
+    }
+    const st = await r.json();
+    // Сессия жива — сразу входим в игру
+    window.sid = sid;
+    document.getElementById('setup').classList.add('hidden');
+    document.getElementById('game').classList.remove('hidden');
+    document.getElementById('log').innerHTML = '';
+    addLog(`Сессия ${sid} восстановлена. Ходит: ${st.order[st.turn]}`, 'mech');
+    currentPlayer = st.order[st.turn];
+    setTurn();
+  } catch (e) {
+    localStorage.removeItem('sid');
+  }
+});
 </script>
 </body>
 </html>
