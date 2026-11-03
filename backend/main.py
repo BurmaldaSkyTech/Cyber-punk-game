@@ -430,20 +430,25 @@ def act(sid: str, req: ActionIn):
     reply = chat_json([
         {"role": "system", "content": narr_sys},
         {"role": "user", "content": user_msg}
-        # Проверка на "ты/твой/тебя" в нарративе — жёсткий фильтр
+    ], model=NARR_MODEL, temperature=0.6)
+
+    # Проверка на галлюцинации и "ты" в нарративе
     raw_n = reply.get("narration", "")
-    you_patterns = [" ты ", "твой ", "твоя ", "твоё ", "твои ", "тебя ", "тебе ", " тобой", 
-                    " твой ", " твоя ", " твоё ", " твои ", " вашего", " вашим", " ваша", " ваше"]
+    hallucination_keywords = ["новый сент-джеймс", "клан королевских", "покровительств"]
+    has_hallucination = any(kw in raw_n.lower() for kw in hallucination_keywords)
+    you_patterns = [
+        " ты ", "твой ", "твоя ", "твоё ", "твои ", "тебя ", "тебе ",
+        " тобой", " твой ", " твоя ", " твоё ", " твои ",
+        " вашего", " вашим", " ваша", " ваше"
+    ]
     has_you = any(p in raw_n.lower() for p in you_patterns)
-    
+
     if has_you or has_hallucination or CJK.search(raw_n) or len(clean(raw_n)) < 40:
-        # Повторный запрос с усиленным промптом
-        retry_sys = narr_sys + "\n\n**ВТОРАЯ ПОПЫТКА. ПРЕДЫДУЩИЙ ОТВЕТ СОДЕРЖАЛ ЗАПРЕЩЁННЫЕ 'ТЫ/ТЕБЯ'. ПИШИ ТОЛЬКО В ТРЕТЬЕМ ЛИЦЕ.**"
+        retry_sys = narr_sys + "\n\n**ВТОРАЯ ПОПЫТКА. ПРЕДЫДУЩИЙ ОТВЕТ НАРУШАЛ ПРАВИЛА. ПИШИ ТОЛЬКО В ТРЕТЬЕМ ЛИЦЕ.**"
         reply = chat_json([
             {"role": "system", "content": retry_sys},
             {"role": "user", "content": user_msg}
-        ], model=NARR_MODEL, temperature=0.4)    
-    ], model=NARR_MODEL, temperature=0.6)
+        ], model=NARR_MODEL, temperature=0.4)
 
     # Проверка на галлюцинации (если нарратив содержит слова, которых нет в контексте)
     raw_n = reply.get("narration", "")
