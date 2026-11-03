@@ -9,7 +9,7 @@
   .container { max-width: 900px; margin: 0 auto; }
   h1 { color: #ff2a6d; text-shadow: 0 0 10px #ff2a6d; }
   .log { background: #12121a; border: 1px solid #333; border-radius: 8px; padding: 15px; min-height: 300px; margin-bottom: 15px; overflow-y: auto; max-height: 60vh; }
-  .entry { margin-bottom: 12px; padding: 10px; border-left: 3px solid #05d9e8; background: #1a1a25; }
+  .entry { margin-bottom: 12px; padding: 10px; border-left: 3px solid #05d9e8; background: #1a1a25; white-space: pre-wrap; }
   .entry.mech { border-left-color: #ff2a6d; font-family: monospace; font-size: 0.9em; }
   .entry.narr { border-left-color: #05d9e8; }
   .entry.rate { border-left-color: #ffd700; background: #1f1f15; }
@@ -93,6 +93,24 @@ const SCENARIO = {
   npcs: [{id:"kessler", name:"Фиксер Кесслер", hp:15, max_hp:15, wound:"unharmed", armor:"leathers"}]
 };
 
+function showSceneIntro(state) {
+  const scene = state.scenario?.scene || '';
+  if (scene) {
+    addLog(`[СЦЕНА]\n${scene}`, 'narr');
+  }
+  const npcs = state.npcs || [];
+  if (npcs.length > 0) {
+    const npcList = npcs.map(n => `• ${n.name} (HP ${n.hp}/${n.max_hp}, ${n.wound || 'unharmed'}, броня: ${n.armor || 'нет'})`).join('\n');
+    addLog(`[В СЦЕНЕ]\n${npcList}`, 'mech');
+  }
+  // Выводим игроков
+  const players = state.players || [];
+  if (players.length > 0) {
+    const pl = players.map(p => `• ${p.name} [${p.role}] HP ${p.hp}/${p.max_hp}`).join('\n');
+    addLog(`[ПЕРСОНАЖИ]\n${pl}`, 'mech');
+  }
+}
+
 async function enterGame(sessionId, state) {
   sid = sessionId;
   localStorage.setItem('sid', sid);
@@ -102,6 +120,7 @@ async function enterGame(sessionId, state) {
   currentPlayer = state.order[state.turn];
   setTurn();
   addLog(`Сессия ${sid}. Ходит: ${currentPlayer}`, 'mech');
+  showSceneIntro(state);
 }
 
 async function start() {
@@ -190,12 +209,13 @@ window.addEventListener('load', async () => {
   const params = new URLSearchParams(window.location.search);
   const urlSid = params.get('sid');
   const storedSid = urlSid || localStorage.getItem('sid');
-  if (!storedSid) return;  // нет сессии — показываем блок выбора
+  if (!storedSid) return;
   try {
     const r = await fetch(`/session/${storedSid}`);
     if (!r.ok) { localStorage.removeItem('sid'); return; }
     const st = await r.json();
     await enterGame(storedSid, st);
+    // showSceneIntro уже вызывается внутри enterGame
   } catch (e) {
     localStorage.removeItem('sid');
   }

@@ -320,7 +320,24 @@ def main():
                       json={"players": players, "scenario": SCENARIO}, timeout=60).json()
     sid = s["id"]
     print("\nсессия:", sid)
-    print("команды: текст = действие | assist:Имя текст = Имя помогает текущему")
+    
+    # Описание сцены
+    print("\n" + "=" * 70)
+    print("   НАЧАЛО ИГРЫ")
+    print("=" * 70)
+    print("\n" + s["state"]["scenario"].get("scene", ""))
+    
+    # Показываем NPC в сцене
+    npcs = s["state"].get("npcs", [])
+    if npcs:
+        print("\nВ сцене:")
+        for n in npcs:
+            print(f"  • {n['name']} ({n.get('wound', 'unharmed')}, броня: {n.get('armor', 'нет')})")
+    
+    # Первый ход
+    current = s["state"]["order"][s["state"]["turn"]]
+    print(f"\n[GM] Сейчас ходит: {current}. Что вы делаете?")
+    print("\nкоманды: текст = действие | assist:Имя текст = Имя помогает текущему")
     print("пример: assist:Никс взламываю замок прилавка\n")
 
     while True:

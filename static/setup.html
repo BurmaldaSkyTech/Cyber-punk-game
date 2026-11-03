@@ -345,8 +345,9 @@ function goStep(n) {
 }
 
 function finishChar() {
+  if (!draft.role) { alert("Выбери роль"); return; }
+  if (!draft.name) { draft.name = `Игрок ${current+1}`; }
   saveDraft();
-  if (!draft.name || !draft.role) { alert("Имя и роль обязательны"); return; }
   document.querySelectorAll('.tab').forEach((t,idx)=>{
     t.classList.toggle('done', players[idx]!==null);
   });
@@ -428,14 +429,16 @@ async function startGame() {
     }
 
     // Создание сессии
-    const scenario = {
-      scene: "Бар 'Ржавый болт', Ночной Город, 23:40. За угловым столом среди дыма и неоновых бликов сидит фиксер Кесслер и ждёт тебя. На столе — стакан синтетического виски и дата-планшет с контрактом.",
-      heat: 1,
-      clocks: {},
-      npcs: [
-        {id:"kessler", name:"Фиксер Кесслер", hp:15, max_hp:15, wound:"unharmed", armor:"leathers"}
-      ]
-    };
+const scenario = {
+  scene: "Бар 'Ржавый болт', Ночной Город, 23:40. За угловым столом среди дыма и неоновых бликов сидит фиксер Кесслер. За барной стойкой — два его телохранителя в кевларе с тяжёлыми пистолетами под плащами. На столе у Кесслера — стакан синтетического виски и дата-планшет с контрактом.",
+  heat: 1,
+  clocks: {},
+  npcs: [
+    {id:"kessler", name:"Фиксер Кесслер", hp:15, max_hp:15, wound:"unharmed", armor:"leathers"},
+    {id:"guard1", name:"Телохранитель Кесслера 1", hp:24, max_hp:24, wound:"unharmed", armor:"kevlar"},
+    {id:"guard2", name:"Телохранитель Кесслера 2", hp:24, max_hp:24, wound:"unharmed", armor:"kevlar"}
+  ]
+};
     const r = await fetch('/session', {method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({players: fullPlayers, scenario: scenario})});
