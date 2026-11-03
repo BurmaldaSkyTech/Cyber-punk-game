@@ -206,6 +206,12 @@ NPC_FALLBACK = {
     "armor": "kevlar",
 }
 
+# Оружие NPC-охраны (по их id из сценария)
+NPC_WEAPON = {
+    "guard1": "heavy_pistol",
+    "guard2": "smg",
+}
+
 
 def resolve_npc_reaction(state, actor, mech):
     """NPC отвечает один раз после действия игрока, если бой уже начался."""
