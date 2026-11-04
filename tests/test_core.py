@@ -132,3 +132,66 @@ def test_no_mojibake_in_chunks():
         pytest.skip("chunks not built")
     bad = sum(1 for l in open(p, encoding="utf-8") if "â–" in l)
     assert bad == 0, "mojibake in chunks: run 09_fix_mojibake.py + 03_index.py"
+ 
+def test_wound_thresholds():
+    from backend.wounds import get_wound_state
+
+    # Здоров только при полном HP
+    assert get_wound_state(10, 10) == "unharmed"
+
+    # Больше половины — легко ранен
+    assert get_wound_state(9, 10) == "lightly"
+    assert get_wound_state(6, 10) == "lightly"
+
+    # Половина или меньше, но больше нуля — серьёзно ранен
+    assert get_wound_state(5, 10) == "seriously"
+    assert get_wound_state(1, 10) == "seriously"
+
+    # Ноль и ниже — смертельно ранен
+    assert get_wound_state(0, 10) == "mortally"
+    assert get_wound_state(-1, 10) == "mortally"
+
+
+def test_wound_penalties():
+    from backend.wounds import get_wound_penalty
+    
+    assert get_wound_penalty("unharmed") == 0
+    assert get_wound_penalty("lightly") == 0
+    assert get_wound_penalty("seriously") == -2
+    assert get_wound_penalty("mortally") == -4
+
+
+def test_apply_damage():
+    from backend.wounds import apply_damage
+
+    # Лёгкий урон: 10 -> 7, это больше половины, значит lightly
+    target = {"hp": 10, "max_hp": 10}
+    result = apply_damage(target, 3)
+    assert result["hp"] == 7
+    assert result["wound_state"] == "lightly"
+    assert result["penalty"] == 0
+
+    # Серьёзный урон: 5 -> -1, ниже нуля, значит mortally
+    target = {"hp": 5, "max_hp": 10}
+    result = apply_damage(target, 6)
+    assert result["hp"] == -1
+    assert result["wound_state"] == "mortally"
+    assert result["death_save"] is True
+
+    # Смертельный урон: 1 -> -14
+    target = {"hp": 1, "max_hp": 10}
+    result = apply_damage(target, 15)
+    assert result["hp"] == -14
+    assert result["wound_state"] == "mortally"
+    assert result["death_save"] is True
+
+
+def test_death_save():
+    from backend.wounds import death_save
+    
+    target = {"stats": {"BODY": 10}}
+    result = death_save(target)
+    assert result["roll"] <= 10
+    assert result["body"] == 10
+    # С BODY 10 никогда не умрёт
+    assert result["dead"] is False 
