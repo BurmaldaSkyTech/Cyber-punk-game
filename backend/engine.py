@@ -2,6 +2,27 @@
 import json, random, re
 from pathlib import Path
 from . import db
+# Загрузка полных данных из файлов
+import json
+from pathlib import Path
+
+_data_dir = Path(__file__).parent.parent / "data" / "normalized"
+
+def _load_json(filename, default=None):
+    path = _data_dir / filename
+    if path.exists():
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    return default or {}
+
+SKILLS_FULL = _load_json("skills_full.json", {})
+WEAPONS_FULL = _load_json("weapons_full.json", {})
+ARMOR_FULL = _load_json("armor_full.json", {})
+CYBERWARE_FULL = _load_json("cyberware_full.json", {})
+
+# Обновление карты статов на основе полного списка навыков
+for skill_name, skill_data in SKILLS_FULL.items():
+    SKILL_STAT[skill_name] = skill_data["stat"]
 
 RULES = Path(__file__).resolve().parent.parent / "data" / "rules"
 
