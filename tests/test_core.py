@@ -195,3 +195,80 @@ def test_death_save():
     assert result["body"] == 10
     # С BODY 10 никогда не умрёт
     assert result["dead"] is False 
+ 
+def test_body_install_cyberware():
+    from backend import body
+
+    ch = {"cyberware": [], "humanity": 50}
+
+    # Устанавливаем первый мозговой имплант
+    result = body.install_cyberware(ch, "Neural Link", rng=None)
+    assert result["success"] is True
+    assert "Neural Link" in ch["cyberware"]
+    assert ch["humanity"] <= 50
+
+    # Второй мозговой имплант в единственный слот мозга ставить нельзя
+    result = body.install_cyberware(ch, "Interface Plugs")
+    assert result["success"] is False
+    assert "слот" in result["reason"].lower()
+
+
+def test_body_humanity_loss():
+    from backend import body
+
+    class FakeRNG:
+        def randint(self, a, b):
+            return 1
+
+    ch = {"cyberware": [], "humanity": 10}
+    result = body.install_cyberware(ch, "Neural Link", rng=FakeRNG())
+    assert result["success"] is True
+    assert result["humanity_loss"] == 1
+    assert ch["humanity"] == 9
+
+
+def test_inventory_capacity():
+    from backend import inventory
+
+    ch = {
+        "stats": {"BODY": 5},
+        "inventory": [],
+    }
+
+    assert inventory.capacity(ch) == 10
+
+    # Пистолет занимает 1 слот
+    result = inventory.add_item(ch, "medium_pistol")
+    assert result["success"] is True
+    assert inventory.used_slots(ch) == 1
+
+    # Заполняем инвентарь
+    for _ in range(9):
+        result = inventory.add_item(ch, "medium_pistol")
+        assert result["success"] is True
+
+    # Одиннадцатый пистолет не влезает
+    result = inventory.add_item(ch, "medium_pistol")
+    assert result["success"] is False
+    assert "переполнен" in result["reason"].lower()
+
+
+def test_inventory_buy_item():
+    from backend import inventory
+
+    ch = {
+        "stats": {"BODY": 5},
+        "inventory": [],
+        "eb": 120,
+    }
+
+    # Покупаем средний пистолет за 50
+    result = inventory.buy_item(ch, "medium_pistol")
+    assert result["success"] is True
+    assert ch["eb"] == 70
+    assert inventory.has_item(ch, "medium_pistol")
+
+    # На 70 эдди тяжёлый пистолет за 100 купить нельзя
+    result = inventory.buy_item(ch, "heavy_pistol")
+    assert result["success"] is False
+    assert ch["eb"] == 70 
