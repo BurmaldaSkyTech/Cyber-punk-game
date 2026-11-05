@@ -254,16 +254,40 @@ def chargen_endpoint(req: ChargenIn):
 
 @app.post("/chargen/validate")
 def chargen_validate(req: dict):
-    role = req.get("role")
-    if role in chargen.ROLES:
-        rd = chargen.ROLES[role]
-        req.setdefault("cyberware", rd["starting_cyberware"])
-        req.setdefault("eb", chargen.STARTING_EB[role])
-        req.setdefault("weapon", rd["weapon"])
-        req.setdefault("armor", rd["armor"])
-        req.setdefault("gear", rd["items"])
-        req.setdefault("ability", rd["ability"])
-    _, problems = chargen.manual_character(req)
+    """Валидирует персонажа из ручного ввода."""
+    # Создаём персонажа
+    try:
+        ch = chargen.manual_character(req)
+    except KeyError as e:
+        return {"valid": False, "problems": [f"Отсутствует поле: {e}"]}
+    except Exception as e:
+        return {"valid": False, "problems": [f"Ошибка: {str(e)}"]}
+    
+    # Валидируем
+    problems = []
+    
+    # Проверка статов
+    stats = ch.get("stats", {})
+    stat_sum = sum(stats.values())
+    if stat_sum != 62:
+        problems.append(f"Сумма статов должна быть 62, получено {stat_sum}")
+    
+    for s in ["INT", "REF", "DEX", "TECH", "COOL", "WILL", "LUCK", "MOVE", "BODY", "EMP"]:
+        v = stats.get(s, 0)
+        if v < 2 or v > 8:
+            problems.append(f"Стат {s} должен быть 2-8, получено {v}")
+    
+    # Проверка HP
+    expected_hp = stats.get("BODY", 5) * 2
+    if ch.get("hp") != expected_hp or ch.get("max_hp") != expected_hp:
+        problems.append(f"HP должно быть {expected_hp}")
+    
+    # Проверка имени и роли
+    if not ch.get("name"):
+        problems.append("Имя обязательно")
+    if not ch.get("role"):
+        problems.append("Роль обязательна")
+    
     return {"valid": len(problems) == 0, "problems": problems}
 
 
@@ -562,3 +586,90 @@ def rate_turn(sid: str, tid: int, req: RateIn):
         raise HTTPException(400, "Rating must be 1-5")
     db.rate_turn(tid, req.rating, req.edited)
     return {"ok": True, "turn_id": tid, "rating": req.rating}
+
+class BuyIn(BaseModel):
+    item: str
+    qty: int = 1
+
+
+class InstallIn(BaseModel):
+    ware: str
+
+
+@app.post("/session/{sid}/player/{player}/buy")
+def buy_item_endpoint(sid: str, player: str, req: BuyIn):
+    from backend import inventory
+    st = SESSIONS.get(sid)
+    if not st:
+        raise HTTPException(404)
+    actor = next((p for p in st["players"] if p["name"] == player), None)
+    if not actor:
+        raise HTTPException(404, "no such player")
+    result = inventory.buy_item(actor, req.item, qty=req.qty)
+    if not result["success"]:
+        raise HTTPException(400, result["reason"])
+    return result
+
+
+@app.post("/session/{sid}/player/{player}/install")
+def install_cyberware_endpoint(sid: str, player: str, req: InstallIn):
+    from backend import body
+    st = SESSIONS.get(sid)
+    if not st:
+        raise HTTPException(404)
+    actor = next((p for p in st["players"] if p["name"] == player), None)
+    if not actor:
+        raise HTTPException(404, "no such player")
+    result = body.install_cyberware(actor, req.ware, pay_eb=True)
+    if not result["success"]:
+        raise HTTPException(400, result["reason"])
+    return result
+
+
+@app.get("/session/{sid}/player/{player}/inventory")
+def get_inventory(sid: str, player: str):
+    st = SESSIONS.get(sid)
+    if not st:
+        raise HTTPException(404)
+    actor = next((p for p in st["players"] if p["name"] == player), None)
+    if not actor:
+        raise HTTPException(404, "no such player")
+    from backend import inventory, body
+    return {
+        "player": player,
+        "eb": actor.get("eb", 0),
+        "inventory": actor.get("inventory", []),
+        "capacity": inventory.capacity(actor),
+        "used_slots": inventory.used_slots(actor),
+        "cyberware": actor.get("cyberware", []),
+        "humanity": actor.get("humanity", 0),
+    }
+
+
+@app.get("/shop/catalog")
+def shop_catalog():
+    """Возвращает каталог магазина: оружие, броня, импланты, снаряжение."""
+    from backend import inventory, body
+    catalog = []
+    for key, data in inventory.WEAPONS.items():
+        catalog.append({
+            "key": key, "name": data.get("name", key),
+            "category": "weapon", "price": data.get("price", 0),
+        })
+    for key, data in inventory.ARMOR.items():
+        catalog.append({
+            "key": key, "name": data.get("name", key),
+            "category": "armor", "price": data.get("price", 0),
+        })
+    for key, data in body.CYBERWARE.items():
+        catalog.append({
+            "key": key, "name": data.get("name", key),
+            "category": "cyberware", "price": data.get("price", 0),
+            "slot": data.get("slot", "none"),
+        })
+    for key, data in inventory.GEAR.items():
+        catalog.append({
+            "key": key, "name": data.get("name", key),
+            "category": "gear", "price": data.get("price", 0),
+        })
+    return catalog    
