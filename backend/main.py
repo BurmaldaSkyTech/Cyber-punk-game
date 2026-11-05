@@ -5,13 +5,14 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Optional
-import uuid, json, os
+import uuid, json, os, re
 from pathlib import Path
 
 from . import db, engine, scenario, chargen
 from .llm import chat_json
 from .rag import RulesSearch
 from .common import clean, CJK
+from . import spawn
 
 app = FastAPI()
 
@@ -99,32 +100,6 @@ dv_key: тривиально -> everyday; настороже -> difficult; за�
 skill строго из списка персонажа.
 Верни ТОЛЬКО JSON."""
 
-NARR_SYS = """Ты — игровой мастер текстовой киберпанк-настолки. Пиши СТРОГО на русском, без латинских и иероглифических букв внутри слов.
-Жанр: мрачный неонуар, короткая жёсткая проза. Запрещены штампы "в воздухе витает", "запах коррозии и тайны".
-ПРАВИЛА:
-1. Третье лицо о персонаже игрока: "Вектор сделал", "Никс успела". Никаких "ты/ваш".
-2. Начни прямо с результата заявленного действия, не пересказывай сцену.
-3. УСПЕХ/ПРОВАЛ бери из РЕЗУЛЬТАТА. Если в ПОСЛЕДСТВИЯХ сказано "броня поглотила весь урон" — НЕТ раны и крови: описывай удар, искры, отдачу, контузию, но цель НЕ ранена.
-4. ЗАПРЕЩЕНО копировать фразы из ПРИМЕРОВ и из блока ПРЕДЫДУЩИЕ ХОДЫ: каждый ход — новый кадр и новые формулировки.
-5. Запрещено вводить персонажей, банды и события, которых нет в СЦЕНЕ и ФАКТАХ. ЛОР — только названия и детали.
-6. Описывай только те изменения состояния NPC, которые есть в ПОСЛЕДСТВИЯХ.
-7. Числа урона, HP, DV — только из ФАКТОВ.
-8. Объём 3–5 предложений, затем 1–2 вопроса и 2–4 варианта инфинитивом.
-9. РЕАКЦИЯ NPC: если игрок успешно атакует или взламывает NPC, NPC активно реагирует: отбивается, уклоняется, контратакует, зовёт подмогу. Пассивное поведение запрещено.
-10. FREE-ДЕЙСТВИЯ: если РЕЗУЛЬТАТ = "НЕЙТРАЛЬНО (без броска)", НЕ пиши про успех/провал/бросок. Описывай просто действие и атмосферу.
-11. АНТИ-ПОВТОР: НЕ начинай два хода подряд с одного и того же жеста или фразы NPC. Меняй фокус кадра.
-12. Имя персонажа — СУЩЕСТВИТЕЛЬНОЕ. Никогда не используй имя как глагол.
-
-ПРИМЕРЫ (копировать их фразы запрещено):
-ФАКТЫ: действие "незаметно дёрнуть флешку", ПРОВАЛ, margin -2
-НАРРАТИВ: "Локоть курьера в последний момент уходит в сторону — пальцы смыкаются на пустой ткани. Он резко оборачивается, прижимая флешку к груди, и его глаза мечутся в поисках охраны."
-ФАКТЫ: действие "выстрелить в охранника", УСПЕХ, net_damage 0, armor_sp 7
-НАРРАТИВ: "Пуля заставляет охранника дёрнуться, но тяжёлый armorjack лишь щёлкает под ударом: пластина держит. Он ныряет за прилавок и хрипло кричит что-то в рацию."
-
-Верни только JSON:
-{"narration": str, "questions": [str], "choices": [str],
- "safe_state_suggestions": {"heat_delta": -1|0|1, "add_flags": [str], "clock_progress": {name: 0|1|2}, "npc_action": str}}"""
-
 NARR_SYS_UNIVERSAL = """Ты — игровой мастер текстовой киберпанк-настолки. Пиши СТРОГО на русском, без латинских и иероглифических букв внутри слов.
 Жанр: мрачный неонуар, короткая жёсткая проза.
 
@@ -146,9 +121,7 @@ NARR_SYS_UNIVERSAL = """Ты — игровой мастер текстовой 
 
 === ПРАВИЛА НАРРАЦИИ ===
 
-1. **СТРОГО ТРЕТЬЕ ЛИЦО.** Используй только имя персонажа игрока ("Вектор сделал", "Никс успела") или "он"/"она"/"они". **КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНЫ** обращения "ты", "твой", "тебя", "тебе", "ваш", "ваше" в описаниях.
-   ❌ НЕПРАВИЛЬНО: "Ты входишь в бар", "Твоя рука тянется", "Он смотрит тебе прямо в глаза"
-   ✅ ПРАВИЛЬНО: "Вектор входит в бар", "Его рука тянется", "Он смотрит Вектору прямо в глаза"
+1. **СТРОГО ТРЕТЬЕ ЛИЦО.** Используй только имя персонажа игрока или "он"/"она"/"они". **КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНЫ** обращения "ты", "твой", "тебя", "тебе", "ваш", "ваше" в описаниях.
    Если имя персонажа — "1" или другое неестественное, используй его как есть в третьем лице.
 
 2. Начни прямо с результата заявленного действия, не пересказывай сцену.
@@ -174,30 +147,34 @@ NARR_SYS_UNIVERSAL = """Ты — игровой мастер текстовой 
 === ТРЕБОВАНИЯ К КАЧЕСТВУ ===
 
 1. Минимум 3 предложения описания + минимум 1 прямая реплика персонажа (если в сцене есть собеседник).
-2. Реплики должны быть живыми: с деталями, интонацией, специфичными словами. Избегай пустых фраз типа "он приветливо поднимает глаза".
-3. Грамматика: соблюдай род и число ("миниатюрную антенну", а не "миниатюрный антенну").
-4. Если игрок здоровается или задаёт вопрос персонажу — персонаж ОБЯЗАН ответить репликой, а не просто "кивнуть" или "поднять глаза".
+2. Реплики должны быть живыми: с деталями, интонацией, специфичными словами.
+3. Грамматика: соблюдай род и число.
+4. Если игрок здоровается или задаёт вопрос персонажу — персонаж ОБЯЗАН ответить репликой.
 5. Каждый ход должен двигать сюжет: раскрывать факт, менять состояние, создавать выбор.
 
-=== ПРАВИЛЬНЫЕ ПРИМЕРЫ (копировать запрещено) ===
+=== ИМЕНА ПЕРСОНАЖЕЙ ===
 
-РАСКРОЙ ФАКТ: "ЦЕЛЬ: крио-капсула с нейроимплантом 'Лазарь' в дата-узле Biotechnica, промзона, sector 7."
-УСПЕХ: "Кесслер стряхивает пепел и наклоняется ближе: 'Биотехника, сектор 7. Там крио-капсула с имплантом Лазарь. Стоит баснословных денег.' *кивает на планшет*"
-
-РАСКРОЙ ФАКТ: "ОХРАНА: 4 guard в kevlar + сержант в heavy armorjack"
-УСПЕХ: "Он барабанит пальцами по столу: 'Четыре охранника в кевларе, плюс сержант в тяжёлой броне. Меняются каждые два часа.'"
-
-ПРОВАЛ: "Кесслер усмехается: 'Охрана? Ну, скажем так, там не пустые коридоры. Но детали — после аванса.'"
-
-НЕ ДЕЛАЙ ТАК:
-❌ "это подлинные данные об опасной миссии по взлому в Новом Сент-Джеймсе" — локация должна быть из РАСКРОЙ ФАКТ
-❌ "проблемы с местным кланом Королевских" — не выдумывай фракции
+Используй ТОЛЬКО имена из блоков ДЕЙСТВУЕТ и NPC В СЦЕНЕ.
+ЗАПРЕЩЕНО придумывать или подставлять любые другие имена (Вектор, Никс и т.п.).
+Если имя персонажа — число или нестандартное слово, используй его БЕЗ склонения.
 
 Верни только JSON:
 {"narration": str, "questions": [str], "choices": [str],
  "safe_state_suggestions": {"heat_delta": -1|0|1, "add_flags": [str],
   "grant_items": [str из списка: assault_rifle, smg, cam_jammer, fake_pass, medkit, grapnel],
   "npc_action": str}}"""
+
+
+# Хелпер для проверки утечек имён
+EXAMPLE_NAMES = ["вектор", "никс"]
+
+
+def leaked_example_names(text, st):
+    """Возвращает имена-примеры, которых нет среди реальных персонажей сцены."""
+    low = text.lower()
+    allowed = ([p["name"].lower() for p in st["players"]] +
+               [n["name"].lower() for n in st.get("npcs", [])])
+    return [n for n in EXAMPLE_NAMES if n in low and n not in allowed]
 
 
 class NewSession(BaseModel):
@@ -255,7 +232,6 @@ def chargen_endpoint(req: ChargenIn):
 @app.post("/chargen/validate")
 def chargen_validate(req: dict):
     """Валидирует персонажа из ручного ввода."""
-    # Создаём персонажа
     try:
         ch = chargen.manual_character(req)
     except KeyError as e:
@@ -263,10 +239,7 @@ def chargen_validate(req: dict):
     except Exception as e:
         return {"valid": False, "problems": [f"Ошибка: {str(e)}"]}
     
-    # Валидируем
     problems = []
-    
-    # Проверка статов
     stats = ch.get("stats", {})
     stat_sum = sum(stats.values())
     if stat_sum != 62:
@@ -277,12 +250,10 @@ def chargen_validate(req: dict):
         if v < 2 or v > 8:
             problems.append(f"Стат {s} должен быть 2-8, получено {v}")
     
-    # Проверка HP
     expected_hp = stats.get("BODY", 5) * 2
     if ch.get("hp") != expected_hp or ch.get("max_hp") != expected_hp:
         problems.append(f"HP должно быть {expected_hp}")
     
-    # Проверка имени и роли
     if not ch.get("name"):
         problems.append("Имя обязательно")
     if not ch.get("role"):
@@ -358,18 +329,42 @@ def consequences(mech):
 
 @app.post("/session/{sid}/action")
 def act(sid: str, req: ActionIn):
+    result = _act_core(sid, req)
+    if result is None:
+        st = SESSIONS.get(sid)
+        print(f"[ERROR] act() вернула None: sid={sid}, player={req.player}, text={req.text!r}")
+        result = {
+            "mechanics": {"action_type": "free", "no_roll": True},
+            "narration": "(Внутренняя ошибка: ветка act() без возврата. Действие учтено как свободное.)",
+            "questions": [],
+            "choices": [],
+            "turn_no": (len(st["log"]) - 1) if st else 0,
+            "turn_id": None,
+            "next_player": st["order"][st["turn"]] if st else "",
+            "state": st,
+        }
+    return result
+
+
+def _act_core(sid: str, req: ActionIn):
     st = SESSIONS.get(sid)
+    print(f"[DEBUG act] st found: {st is not None}")
     if not st:
         raise HTTPException(404)
+
     actor = next((p for p in st["players"] if p["name"] == req.player), None)
+    print(f"[DEBUG act] actor found: {actor is not None}, req.player={req.player!r}")
+    print(f"[DEBUG act] players names: {[p['name'] for p in st['players']]}")
     if not actor:
         raise HTTPException(404, "no such player")
 
     expected = st["order"][st["turn"]]
+    print(f"[DEBUG act] expected={expected!r}, turn={st['turn']}")
     if req.player != expected:
         raise HTTPException(409, f"Сейчас ходит {expected}, а не {req.player}")
 
     scene = st["scenario"].get("scene", "")
+    print(f"[DEBUG act] scene ok")
     npc_lines = "; ".join(f"{n['id']}={n['name']}" for n in st["npcs"])
     threat = next((n["name"] for n in st["npcs"] if n["id"] == st.get("threat")), "нет")
     rules_ctx = SEARCH.search(f"{req.text} rules", k=3)
@@ -411,7 +406,6 @@ def act(sid: str, req: ActionIn):
         if m.get("target_id"):
             st["threat"] = m["target_id"]
 
-    # Раскрытие сюжетного бита при успешном инфо-запросе
     info_kw = ("контракт", "детал", "цель", "информац", "чертеж", "план", "узна",
                "расскаж", "что нужно", "задан", "вопрос")
     is_info = (mech.get("action_type") in ("social", "hack", "skill")
@@ -443,14 +437,25 @@ def act(sid: str, req: ActionIn):
     prev = "\n".join(f"{lg['player']}: {lg['text']} => {lg['narration'][:180]}"
                      for lg in st["log"][-2:])
 
+    actor_name = actor["name"]
+    players_names = ", ".join(p["name"] for p in st["players"])
+    npc_block = spawn.npc_context(st)
+
     user_msg = (
-        f"СЦЕНА: {scene}\n{act_ctx}\nNPC в сцене: {npc_lines}\nHeat: {st['heat']}, флаги: {st['flags']}\n"
-        f"ПЕРСОНАЖ ИГРОКА: {actor['name']} ({actor['role']})\n"
+        f"ДЕЙСТВУЕТ: {actor_name}\n"
+        f"ИГРОКИ В СЦЕНЕ: {players_names}\n"
+        f"ИМЕНА: используй ТОЛЬКО имена из блоков ДЕЙСТВУЕТ, ИГРОКИ В СЦЕНЕ и NPC В СЦЕНЕ. "
+        f"ЗАПРЕЩЕНО подставлять любые другие имена (Вектор, Никс и т.п.). "
+        f"Если имя — число или нестандартное слово, пиши его БЕЗ склонения.\n"
+        f"СЦЕНА: {scene}\n{act_ctx}\n"
+        f"NPC В СЦЕНЕ:\n{npc_block}\n"
+        f"Heat: {st['heat']}, флаги: {st['flags']}\n"
+        f"ПЕРСОНАЖ ИГРОКА: {actor_name} ({actor['role']})\n"
         f"ЗАЯВЛЕНОЕ ДЕЙСТВИЕ: {req.text}\n"
         f"СМЫСЛ ДЕЙСТВИЯ: {ACTION_LABEL.get(mech.get('action_type'), 'действие')}\n"
         f"ФАКТЫ БРОСКА: {facts}\nРЕЗУЛЬТАТ: {outcome}\n"
         f"ПОСЛЕДСТВИЯ (обязательно соблюдать):\n{cons}\n"
-        + (f"РАСКРОЙ ФАКТ СЕЙЧАС (обязательно вплести в реплику Кесслера конкретно):\n- {just_revealed}\n" if just_revealed else "")
+        + (f"РАСКРОЙ ФАКТ СЕЙЧАС (обязательно вплести в реплику NPC конкретно):\n- {just_revealed}\n" if just_revealed else "")
         + (f"УЖЕ РАСКРЫТО РАНЬШЕ (не повторяй без вопроса):\n" + "\n".join("- " + b for b in st["revealed_beats"][:-1]) + "\n" if len(st["revealed_beats"]) > 1 else "")
         + (f"ФИЗИЧЕСКИ ВЫДАНО ИГРОКУ (на руках, учитывай в сценах):\n" + "\n".join("- " + g for g in st["granted"]) + "\n" if st.get("granted") else "")
         + (f"ПРЕДЫДУЩИЕ ХОДЫ:\n{prev}\n" if prev else "")
@@ -464,41 +469,37 @@ def act(sid: str, req: ActionIn):
         {"role": "user", "content": user_msg}
     ], model=NARR_MODEL, temperature=0.6)
 
-    # Проверка на галлюцинации и "ты" в нарративе
     raw_n = reply.get("narration", "")
     hallucination_keywords = ["новый сент-джеймс", "клан королевских", "покровительств"]
-    has_hallucination = any(kw in raw_n.lower() for kw in hallucination_keywords)
     you_patterns = [
         " ты ", "твой ", "твоя ", "твоё ", "твои ", "тебя ", "тебе ",
         " тобой", " твой ", " твоя ", " твоё ", " твои ",
         " вашего", " вашим", " ваша", " ваше"
     ]
+    has_hallucination = any(kw in raw_n.lower() for kw in hallucination_keywords)
     has_you = any(p in raw_n.lower() for p in you_patterns)
+    leaked = leaked_example_names(raw_n, st)
+    has_cjk = bool(CJK.search(raw_n))
+    too_short = len(clean(raw_n)) < 40
 
-    if has_you or has_hallucination or CJK.search(raw_n) or len(clean(raw_n)) < 40:
-        retry_sys = narr_sys + "\n\n**ВТОРАЯ ПОПЫТКА. ПРЕДЫДУЩИЙ ОТВЕТ НАРУШАЛ ПРАВИЛА. ПИШИ ТОЛЬКО В ТРЕТЬЕМ ЛИЦЕ.**"
+    if has_you or has_hallucination or leaked or has_cjk or too_short:
+        retry_sys = narr_sys + (
+            "\n\n**ВТОРАЯ ПОПЫТКА. ПРЕДЫДУЩИЙ ОТВЕТ НАРУШАЛ ПРАВИЛА: "
+            "обращение на «ты», выдуманные локации/фракции, чужие имена или слишком короткий текст. "
+            "Пиши ТОЛЬКО в третьем лице. Используй ТОЛЬКО имена из блоков ДЕЙСТВУЕТ, "
+            "ИГРОКИ В СЦЕНЕ и NPC В СЦЕНЕ. Используй ТОЛЬКО факты из контекста.**"
+        )
         reply = chat_json([
             {"role": "system", "content": retry_sys},
             {"role": "user", "content": user_msg}
         ], model=NARR_MODEL, temperature=0.4)
+        raw_n = reply.get("narration", "")
+        leaked = leaked_example_names(raw_n, st)
 
-    # Проверка на галлюцинации (если нарратив содержит слова, которых нет в контексте)
-    raw_n = reply.get("narration", "")
-    hallucination_keywords = ["новый сент-джеймс", "клан королевских", "покровительств"]
-    has_hallucination = any(kw in raw_n.lower() for kw in hallucination_keywords)
-
-    if has_hallucination or CJK.search(raw_n) or len(clean(raw_n)) < 40:
-        reply = chat_json([
-            {"role": "system", "content": narr_sys},
-            {"role": "user", "content": user_msg}
-        ], model=NARR_MODEL, temperature=0.4)
-
-    raw_n = reply.get("narration", "")
-    if CJK.search(raw_n) or len(clean(raw_n)) < 40:
-        reply = chat_json([
-            {"role": "system", "content": narr_sys},
-            {"role": "user", "content": user_msg}
-        ], model=NARR_MODEL, temperature=0.4)
+    if leaked:
+        for bad in leaked:
+            raw_n = re.sub(rf"\b{bad}\w*", actor_name, raw_n, flags=re.IGNORECASE)
+        reply["narration"] = raw_n
 
     sug = clamp_suggestions(reply.get("safe_state_suggestions"), st)
     st["heat"] = max(0, min(10, st["heat"] + sug["heat_delta"]))
@@ -511,15 +512,13 @@ def act(sid: str, req: ActionIn):
         st["flags"].append(sug["npc_action"])
     st["granted"] = st.get("granted", []) + [g for g in sug["grant_items"]
                                              if g not in st.get("granted", [])]
-        # Автоматический переход к Акту 2
+
     act_type = st.get("act", "fixer")
     if act_type == "fixer":
-        # Триггер 1: игрок хочет уйти
-        trigger_phrases = [req.text.lower(), (m.get("_text", "") or "").lower()]
+        trigger_phrases = [req.text.lower(), (mech.get("_text", "") or "").lower()]
         wants_to_leave = any(trig in phrase for phrase in trigger_phrases for trig in ACT2_TRIGGERS)
         
-        # Триггер 2: Кесслер устал от провалов (только если patience = 0 ИЛИ 3+ провала)
-        recent_logs = st["log"][-4:]  # последние 4 хода
+        recent_logs = st["log"][-4:]
         fail_count = sum(1 for lg in recent_logs if lg.get("mech", {}).get("success") is False)
         patience_low = st.get("patience", 4) <= 0
         kessler_tired = fail_count >= 3 or patience_low
@@ -558,6 +557,7 @@ def act(sid: str, req: ActionIn):
                 "next_player": st["order"][0],
                 "state": st
             }
+
     narration = clean(reply.get("narration", ""))
     questions = [clean(q) for q in reply.get("questions", []) if clean(q)]
     choices = [clean(c) for c in reply.get("choices", []) if clean(c)]
@@ -586,6 +586,7 @@ def rate_turn(sid: str, tid: int, req: RateIn):
         raise HTTPException(400, "Rating must be 1-5")
     db.rate_turn(tid, req.rating, req.edited)
     return {"ok": True, "turn_id": tid, "rating": req.rating}
+
 
 class BuyIn(BaseModel):
     item: str
@@ -672,4 +673,4 @@ def shop_catalog():
             "key": key, "name": data.get("name", key),
             "category": "gear", "price": data.get("price", 0),
         })
-    return catalog    
+    return catalog
