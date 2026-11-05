@@ -8,6 +8,7 @@ from typing import Optional
 import uuid, json, os, re
 from pathlib import Path
 
+from . import netrunning
 from . import db, engine, scenario, chargen
 from .llm import chat_json
 from .rag import RulesSearch
@@ -440,6 +441,13 @@ def _act_core(sid: str, req: ActionIn):
     actor_name = actor["name"]
     players_names = ", ".join(p["name"] for p in st["players"])
     npc_block = spawn.npc_context(st)
+ 
+   # Контекст нетраннинга
+    net_context = ""
+    if mech.get("hack_result") == "entered":
+        net_context = (f"\nНЕТРАННИНГ: {actor_name} вошёл в сеть '{mech.get('architecture')}'. "
+                      f"Этаж {mech.get('floor')}/{mech.get('max_floors')}, DV {mech.get('dv')}.") 
+ 
 
     user_msg = (
         f"ДЕЙСТВУЕТ: {actor_name}\n"
@@ -460,7 +468,9 @@ def _act_core(sid: str, req: ActionIn):
         + (f"ФИЗИЧЕСКИ ВЫДАНО ИГРОКУ (на руках, учитывай в сценах):\n" + "\n".join("- " + g for g in st["granted"]) + "\n" if st.get("granted") else "")
         + (f"ПРЕДЫДУЩИЕ ХОДЫ:\n{prev}\n" if prev else "")
         + f"ПРАВИЛА (справочно):\n{ctx}\nЛОР (только названия и детали):\n{fctx}"
-    )
+        + net_context
+        + f"ПРАВИЛА (справочно):\n{ctx}\nЛОР (только названия и детали):\n{fctx}"
+    )        
 
     narr_sys = NARR_SYS_UNIVERSAL
 
