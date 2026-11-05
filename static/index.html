@@ -6,9 +6,32 @@
 <title>Cyberpunk RED</title>
 <style>
   body { font-family: 'Segoe UI', sans-serif; background: #0a0a0f; color: #e0e0e5; margin: 0; padding: 20px; }
-  .container { max-width: 900px; margin: 0 auto; }
+  .container { max-width: 1700px; margin: 0 auto; }
   h1 { color: #ff2a6d; text-shadow: 0 0 10px #ff2a6d; }
-  .log { background: #12121a; border: 1px solid #333; border-radius: 8px; padding: 15px; min-height: 300px; margin-bottom: 15px; overflow-y: auto; max-height: 60vh; }
+
+  /* === ТРЁХКОЛОНОЧНАЯ РАСКЛАДКА === */
+  .game-layout { display: grid; grid-template-columns: 300px 1fr 300px; gap: 15px; align-items: start; }
+  .sidebar { display: flex; flex-direction: column; gap: 12px; position: sticky; top: 20px; max-height: calc(100vh - 40px); overflow-y: auto; padding-right: 4px; }
+  .sidebar::-webkit-scrollbar { width: 6px; }
+  .sidebar::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+
+  /* === ПАНЕЛИ ПЕРСОНАЖЕЙ === */
+  .char-panel { background: #12121a; border: 1px solid #333; border-radius: 8px; padding: 12px; }
+  .char-panel.active-turn { border: 2px solid #ff2a6d; box-shadow: 0 0 12px rgba(255,42,109,0.35); }
+  .char-panel.dead { opacity: 0.5; }
+  .char-panel h3 { color: #05d9e8; margin: 0 0 8px 0; font-size: 1.05em; }
+  .char-panel h3 .role { color: #888; font-weight: normal; font-size: 0.85em; }
+  .hp-bar { height: 10px; background: #2a2a35; border-radius: 5px; overflow: hidden; margin: 4px 0; }
+  .hp-fill { height: 100%; transition: width 0.3s; }
+  .panel-row { font-size: 0.9em; margin: 3px 0; }
+  .panel-row b { color: #05d9e8; }
+  .panel-section { color: #ff2a6d; font-size: 0.75em; text-transform: uppercase; letter-spacing: 1px; margin: 10px 0 4px 0; border-bottom: 1px solid #333; padding-bottom: 2px; }
+  .panel-small { font-size: 0.82em; color: #bbb; line-height: 1.5; word-break: break-word; }
+  .stat-chip { display: inline-block; background: #1a1a25; border: 1px solid #333; border-radius: 4px; padding: 2px 6px; margin: 2px; font-size: 0.78em; }
+  .stat-chip b { color: #05d9e8; }
+
+  /* === ЛОГ И ВВОД === */
+  .log { background: #12121a; border: 1px solid #333; border-radius: 8px; padding: 15px; min-height: 300px; margin-bottom: 15px; overflow-y: auto; max-height: 68vh; }
   .entry { margin-bottom: 12px; padding: 10px; border-left: 3px solid #05d9e8; background: #1a1a25; white-space: pre-wrap; }
   .entry.mech { border-left-color: #ff2a6d; font-family: monospace; font-size: 0.9em; }
   .entry.narr { border-left-color: #05d9e8; }
@@ -29,6 +52,12 @@
   .star.active { color: #ffd700; }
   .hidden { display: none; }
   .err { color: #ff2a6d; margin-top: 8px; }
+
+  /* === АДАПТИВ === */
+  @media (max-width: 1100px) {
+    .game-layout { grid-template-columns: 1fr; }
+    .sidebar { position: static; max-height: none; }
+  }
 </style>
 </head>
 <body>
@@ -48,24 +77,30 @@
 
   <div id="game" class="hidden">
     <div class="turnbar">Сейчас ходит: <b id="turnwho">—</b></div>
-    <div class="log" id="log"></div>
-    <div class="row">
-      <input id="action" placeholder="Действие текущего ходящего..." onkeydown="if(event.key==='Enter')send()">
-      <button id="sendbtn" onclick="send()">Отправить</button>
-    </div>
-    <div class="err" id="err"></div>
+    <div class="game-layout">
+      <div class="sidebar" id="panel-left"></div>
+      <div class="center-col">
+        <div class="log" id="log"></div>
+        <div class="row">
+          <input id="action" placeholder="Действие текущего ходящего..." onkeydown="if(event.key==='Enter')send()">
+          <button id="sendbtn" onclick="send()">Отправить</button>
+        </div>
+        <div class="err" id="err"></div>
 
-    <div id="rating" class="entry rate hidden">
-      <strong>Оцени нарратив:</strong>
-      <div class="rating" id="stars">
-        <span class="star" data-v="1">★</span>
-        <span class="star" data-v="2">★</span>
-        <span class="star" data-v="3">★</span>
-        <span class="star" data-v="4">★</span>
-        <span class="star" data-v="5">★</span>
+        <div id="rating" class="entry rate hidden">
+          <strong>Оцени нарратив:</strong>
+          <div class="rating" id="stars">
+            <span class="star" data-v="1">★</span>
+            <span class="star" data-v="2">★</span>
+            <span class="star" data-v="3">★</span>
+            <span class="star" data-v="4">★</span>
+            <span class="star" data-v="5">★</span>
+          </div>
+          <textarea id="edited" rows="3" placeholder="Если оценка <= 3 — напиши свой вариант (необязательно)" class="hidden"></textarea>
+          <button onclick="saveRate()" style="margin-top:10px">Сохранить</button>
+        </div>
       </div>
-      <textarea id="edited" rows="3" placeholder="Если оценка <= 3 — напиши свой вариант (необязательно)" class="hidden"></textarea>
-      <button onclick="saveRate()" style="margin-top:10px">Сохранить</button>
+      <div class="sidebar" id="panel-right"></div>
     </div>
   </div>
 </div>
@@ -79,12 +114,18 @@ let busy = false;
 const PREGENS = [
   {name:"Вектор", role:"Solo",
    stats:{INT:3,REF:7,DEX:4,TECH:3,COOL:5,WILL:4,LUCK:2,MOVE:5,BODY:6,EMP:3},
-   skills:{handgun:4,melee:3,evasion:3,athletics:3,perception:3},
-   hp:12,max_hp:12,wound:"unharmed",dsp:0,dead:false,armor:"light_armorjack"},
+   skills:{handgun:4,melee_weapon:3,evasion:3,athletics:3,perception:3},
+   hp:12,max_hp:12,wound:"unharmed",dsp:0,dead:false,armor:"light_armorjack",
+   weapon:"heavy_pistol", eb:1500, humanity:30,
+   cyberware:["Neural Link","Basic Cyberoptic"],
+   inventory:["heavy_pistol","light_armorjack","knife","armored_jacket"]},
   {name:"Никс", role:"Netrunner",
    stats:{INT:6,REF:4,DEX:3,TECH:5,COOL:4,WILL:4,LUCK:3,MOVE:4,BODY:4,EMP:4},
    skills:{interface:4,programming:3,stealth:3,persuasion:3,perception:2},
-   hp:8,max_hp:8,wound:"unharmed",dsp:0,dead:false,armor:"leathers"}
+   hp:8,max_hp:8,wound:"unharmed",dsp:0,dead:false,armor:"leathers",
+   weapon:"medium_pistol", eb:1500, humanity:40,
+   cyberware:["Neural Link","Interface Plugs"],
+   inventory:["medium_pistol","leathers","cyberdeck","agent"]}
 ];
 
 const SCENARIO = {
@@ -97,22 +138,87 @@ const SCENARIO = {
   ]
 };
 
+// ============ ПАНЕЛИ ПЕРСОНАЖЕЙ ============
+
+function hpColor(pct) {
+  if (pct > 50) return '#0f0';
+  if (pct > 25) return '#ff0';
+  return '#f00';
+}
+
+function buildCharPanel(p, isActive) {
+  const div = document.createElement('div');
+  div.className = 'char-panel' + (isActive ? ' active-turn' : '') + (p.dead ? ' dead' : '');
+
+  const maxHp = p.max_hp || 1;
+  const hpPct = Math.max(0, Math.min(100, Math.round((p.hp || 0) / maxHp * 100)));
+  const stats = Object.entries(p.stats || {})
+    .map(([k, v]) => `<span class="stat-chip"><b>${k}</b> ${v}</span>`).join('');
+  const skills = Object.entries(p.skills || {})
+    .sort((a, b) => b[1] - a[1])
+    .map(([k, v]) => `${k} +${v}`).join(', ') || '—';
+  const inv = (p.inventory || []).join(', ') || '—';
+  const cyber = (p.cyberware || []).join(', ') || '—';
+
+  div.innerHTML = `
+    <h3>${p.name} <span class="role">[${p.role}]</span>${p.dead ? ' ☠' : ''}</h3>
+    <div class="hp-bar"><div class="hp-fill" style="width:${hpPct}%;background:${hpColor(hpPct)}"></div></div>
+    <div class="panel-row" style="color:#888;font-size:0.82em">HP ${p.hp}/${p.max_hp} • ${p.wound || 'unharmed'}</div>
+    <div class="panel-row"><b>EB:</b> ${p.eb ?? 0} &nbsp; <b>Человечность:</b> ${p.humanity ?? '—'}</div>
+    <div class="panel-row"><b>Оружие:</b> ${p.weapon || '—'}</div>
+    <div class="panel-row"><b>Броня:</b> ${p.armor || '—'}</div>
+    <div class="panel-section">Характеристики</div>
+    <div class="panel-small">${stats}</div>
+    <div class="panel-section">Навыки</div>
+    <div class="panel-small">${skills}</div>
+    <div class="panel-section">Импланты</div>
+    <div class="panel-small">${cyber}</div>
+    <div class="panel-section">Инвентарь</div>
+    <div class="panel-small">${inv}</div>
+  `;
+  return div;
+}
+
+function buildNpcPanel(state) {
+  const div = document.createElement('div');
+  div.className = 'char-panel';
+  const npcs = (state.npcs || []).map(n => {
+    const maxHp = n.max_hp || 1;
+    const pct = Math.max(0, Math.min(100, Math.round((n.hp || 0) / maxHp * 100)));
+    return `<div style="margin-bottom:10px">
+      <div style="font-size:0.95em">${n.name}${n.dead ? ' ☠' : ''}</div>
+      <div class="hp-bar"><div class="hp-fill" style="width:${pct}%;background:${hpColor(pct)}"></div></div>
+      <div style="font-size:0.78em;color:#888">HP ${n.hp}/${n.max_hp} • ${n.wound || 'unharmed'} • броня: ${n.armor || 'нет'}</div>
+    </div>`;
+  }).join('');
+  div.innerHTML = `<h3 style="color:#ff2a6d">NPC в сцене</h3>${npcs || '<div class="panel-small">Никого</div>'}`;
+  return div;
+}
+
+function renderPanels(state) {
+  const left = document.getElementById('panel-left');
+  const right = document.getElementById('panel-right');
+  if (!left || !right) return;
+  left.innerHTML = '';
+  right.innerHTML = '';
+
+  const activeName = (state.order || [])[state.turn ?? 0];
+  const players = state.players || [];
+
+  players.forEach((p, i) => {
+    const panel = buildCharPanel(p, p.name === activeName);
+    if (i % 2 === 0) left.appendChild(panel);
+    else right.appendChild(panel);
+  });
+
+  right.appendChild(buildNpcPanel(state));
+}
+
+// ============ ЛОГ И СЦЕНА ============
+
 function showSceneIntro(state) {
   const scene = state.scenario?.scene || '';
-  if (scene) {
-    addLog(`[СЦЕНА]\n${scene}`, 'narr');
-  }
-  const npcs = state.npcs || [];
-  if (npcs.length > 0) {
-    const npcList = npcs.map(n => `• ${n.name} (HP ${n.hp}/${n.max_hp}, ${n.wound || 'unharmed'}, броня: ${n.armor || 'нет'})`).join('\n');
-    addLog(`[В СЦЕНЕ]\n${npcList}`, 'mech');
-  }
-  // Выводим игроков
-  const players = state.players || [];
-  if (players.length > 0) {
-    const pl = players.map(p => `• ${p.name} [${p.role}] HP ${p.hp}/${p.max_hp}`).join('\n');
-    addLog(`[ПЕРСОНАЖИ]\n${pl}`, 'mech');
-  }
+  if (scene) addLog(`[СЦЕНА]\n${scene}`, 'narr');
 }
 
 async function enterGame(sessionId, state) {
@@ -125,6 +231,7 @@ async function enterGame(sessionId, state) {
   setTurn();
   addLog(`Сессия ${sid}. Ходит: ${currentPlayer}`, 'mech');
   showSceneIntro(state);
+  renderPanels(state);
 }
 
 async function start() {
@@ -156,9 +263,12 @@ async function send() {
       if (m.no_roll) { addLog(`[без броска] свободное действие`, 'mech'); }
       else { addLog(`[механика] ${m.action_type} | ${m.stat_key}+${m.skill}: ${m.total} vs DV${m.dv} -> ${m.success?'УСПЕХ':'ПРОВАЛ'}`, 'mech'); }
       if (m.damage != null) addLog(`цель ${m.target}: урон ${m.damage} - SP${m.armor_sp} = ${m.net_damage}`, 'mech');
+      if (m.critical_injury) addLog(`[критическая травма] ${m.critical_injury}`, 'mech');
+      if (m.death_save) addLog(`[бросок смерти] ${m.death_save.result}`, 'mech');
       if (m.npc_reaction) { const nr=m.npc_reaction; addLog(`[ответ NPC] ${nr.npc}: ${nr.success?'попадание':'промах'}, урон по игроку ${nr.net_damage||0}`, 'mech'); }
     }
     addLog(d.narration, 'narr');
+    if (d.state) renderPanels(d.state);
     lastTurnId = d.turn_id;
     currentPlayer = d.next_player;
     setTurn();
@@ -184,6 +294,8 @@ function addLog(text, cls) {
   document.getElementById('log').scrollTop = document.getElementById('log').scrollHeight;
 }
 
+// ============ ОЦЕНКА ============
+
 let selectedRating = 0;
 document.querySelectorAll('.star').forEach(s => {
   s.onclick = () => {
@@ -208,7 +320,7 @@ async function saveRate() {
   resetStars();
 }
 
-// === ВОССТАНОВЛЕНИЕ СЕССИИ ПРИ ЗАГРУЗКЕ ===
+// ============ ВОССТАНОВЛЕНИЕ СЕССИИ ============
 window.addEventListener('load', async () => {
   const params = new URLSearchParams(window.location.search);
   const urlSid = params.get('sid');
@@ -219,7 +331,6 @@ window.addEventListener('load', async () => {
     if (!r.ok) { localStorage.removeItem('sid'); return; }
     const st = await r.json();
     await enterGame(storedSid, st);
-    // showSceneIntro уже вызывается внутри enterGame
   } catch (e) {
     localStorage.removeItem('sid');
   }
