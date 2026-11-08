@@ -78,6 +78,9 @@ JUDGE_SYS = """Ты — механический интерпретатор пр
    - Если игрок использует приём боевого искусства (удар ногой, блок, подсечка, бросок, разоружение, удушение) — добавь поле "move": "название_приёма" (например, "high_kick", "sweep", "throw").
    - Список доступных приёмов зависит от стиля персонажа (martial_arts навык 2+).
 2. ВЗЛОМ: сеть, электроника, замки, камеры → hack или skill.
+2.5 ТРАНСПОРТ: вождение, манёвр, погоня, таран, посадка в машину → drive / ram.
+   - "садится в машину", "газует", "маневрирует", "уходит от погони" → drive
+   - "таранит", "врезается в машину" → ram
 3. СОЦИАЛКА (если есть ЛЮБОЕ из): обращение к NPC по имени, просьба ("дай", "одолжи", "можно", "разреши", "покажи", "расскажи"), вопрос NPC ("расскажи", "объясни", "а что если"), убеждение, торг, ложь, лесть → social.
    ВАЖНО: если игрок говорит "дай X и мы пойдём" / "одолжи Y на дело" / "покажи контракт" — это ВСЁ ЕЩЁ social, потому что главное — просьба/приказ, а "пойдём" лишь аргумент.
 4. НАВЫК: скрытность, акробатика, вождение, поиск, медицина и т.п. без обращения к NPC → skill.
@@ -103,6 +106,8 @@ JUDGE_SYS = """Ты — механический интерпретатор пр
 "Встаю и иду к выходу." (физическое действие без просьб) -> {"action_type":"free","skill":null,"dv_key":null,"weapon":null,"target":null,"second":null,"query":null}
 "делаю подсечку" -> {"action_type":"attack_melee","skill":"martial_arts","dv_key":"difficult","weapon":null,"move":"sweep","target":"guard1","second":null,"query":"martial arts sweep"}
 "бросаю противника через бедро" -> {"action_type":"attack_melee","skill":"martial_arts","dv_key":"professional","weapon":null,"move":"throw","target":"guard1","second":null,"query":"martial arts throw"}
+"газует и уходит от погони" -> {"action_type":"drive","skill":"drive_land_vehicle","dv_key":"difficult","weapon":null,"target":null,"second":null,"query":"drive chase maneuver"}
+"таранит машину охранника" -> {"action_type":"ram","skill":"drive_land_vehicle","dv_key":"professional","weapon":null,"target":"guard1","second":null,"query":"ram vehicle damage"}
 
 dv_key: тривиально -> everyday; настороже -> difficult; защита -> professional; на грани -> heroic.
 skill строго из списка персонажа.
@@ -489,6 +494,22 @@ def _act_core(sid: str, req: ActionIn):
         if expired:
             st["flags"].append(f"effect_expired:{','.join(expired)}") 
 
+    # Контекст транспорта и погони
+    from backend import vehicles as veh_mod
+    transport_lines = []
+    for p in st["players"]:
+        if p.get("vehicle"):
+            v = veh_mod.get_vehicle(p["vehicle"])
+            transport_lines.append(f"- {p['name']}: в транспорте {(v or {}).get('name', p['vehicle'])}")
+    chase = st.get("chase")
+    chase_line = ""
+    if chase and chase.get("status") == "active":
+        chase_line = (f"\nПОГОНЯ: дистанция {chase['range']} ({chase.get('range_name', '')}), "
+                      f"раунд {chase['rounds']}")
+    transport_ctx = ""
+    if transport_lines or chase_line:
+        transport_ctx = "\nТРАНСПОРТ В СЦЕНЕ:\n" + "\n".join(transport_lines) + chase_line + "\n"
+
     user_msg = (
         f"ДЕЙСТВУЕТ: {actor_name}\n"
         f"ИГРОКИ В СЦЕНЕ: {players_names}\n"
@@ -497,6 +518,8 @@ def _act_core(sid: str, req: ActionIn):
         f"Если имя — число или нестандартное слово, пиши его БЕЗ склонения.\n"
         f"СЦЕНА: {scene}\n{act_ctx}\n"
         f"NPC В СЦЕНЕ:\n{npc_block}\n"
+        + transport_ctx
+        + f"Heat: {st['heat']}, флаги: {st['flags']}\n"        
         f"Heat: {st['heat']}, флаги: {st['flags']}\n"
         f"ПЕРСОНАЖ ИГРОКА: {actor_name} ({actor['role']})\n"
         f"ЗАЯВЛЕНОЕ ДЕЙСТВИЕ: {req.text}\n"

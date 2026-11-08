@@ -460,3 +460,86 @@ def test_repair_item():
 
     result = crafting.repair_item(ch, "heavy_pistol", 15)
     assert result["success"] is False    
+ 
+def test_vehicles_parse_sp():
+    from backend import vehicles
+
+    assert vehicles.parse_sp("SP 12") == 12
+    assert vehicles.parse_sp("SP 4") == 4
+    assert vehicles.parse_sp(None) == 0
+
+
+def test_vehicles_board_exit():
+    from backend import vehicles
+
+    ch = {"vehicles": ["car_sedan"], "vehicle": None}
+    result = vehicles.board_vehicle(ch, "car_sedan")
+    assert result["success"] is True
+    assert ch["vehicle"] == "car_sedan"
+
+    result = vehicles.exit_vehicle(ch)
+    assert result["success"] is True
+    assert ch["vehicle"] is None
+
+
+def test_vehicles_chase():
+    from backend import vehicles
+
+    chase = vehicles.start_chase("car_sport", "car_sedan")
+    assert chase["range"] == 2
+
+    # Преследователь выигрывает раунд
+    chase = vehicles.chase_step(chase, 18, 12)
+    assert chase["range"] == 1
+
+    # Цель выигрывает два раунда
+    chase = vehicles.chase_step(chase, 10, 15)
+    chase = vehicles.chase_step(chase, 8, 14)
+    assert chase["range"] == 3
+
+    # Преследователь догоняет до 0
+    chase["range"] = 1
+    chase = vehicles.chase_step(chase, 20, 10)
+    assert chase["status"] == "caught"
+
+
+def test_vehicles_ram_damage():
+    from backend import vehicles
+
+    result = vehicles.ram_damage("car_sport", "car_compact")
+    assert result["raw"] >= 1
+    assert result["net"] >= 0
+    assert result["sp"] == 6  # броня car_compact
+
+
+def test_vehicles_buy():
+    from backend import vehicles
+
+    ch = {"eb": 20000}
+    result = vehicles.buy_vehicle(ch, "car_compact")
+    assert result["success"] is True
+    assert ch["eb"] == 10000
+    assert "car_compact" in ch["vehicles"]
+
+    result = vehicles.buy_vehicle(ch, "av_9")
+    assert result["success"] is False 
+
+def test_engine_drive_no_vehicle():
+    from backend import engine
+
+    state = {"npcs": []}
+    actor = {"name": "T", "stats": {"REF": 5}, "skills": {}, "vehicle": None}
+    judge = {"action_type": "drive", "skill": "drive_land_vehicle"}
+    mech = engine.resolve_check(state, actor, judge)
+    assert mech.get("drive_result") == "no_vehicle"
+
+
+def test_engine_ram_no_vehicle():
+    from backend import engine
+
+    state = {"npcs": []}
+    actor = {"name": "T", "stats": {"REF": 5}, "skills": {}, "vehicle": None}
+    judge = {"action_type": "ram", "skill": "drive_land_vehicle"}
+    mech = engine.resolve_check(state, actor, judge)
+    assert mech.get("ram_result") == "no_vehicle"
+    
