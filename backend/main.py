@@ -17,6 +17,7 @@ from .rag import RulesSearch
 from .common import clean, CJK
 from . import spawn
 
+
 app = FastAPI()
 
 app.add_middleware(
@@ -698,8 +699,8 @@ def get_inventory(sid: str, player: str):
 
 @app.get("/shop/catalog")
 def shop_catalog():
-    """Возвращает каталог магазина: оружие, броня, импланты, снаряжение."""
-    from backend import inventory, body
+    """Возвращает каталог магазина: оружие, броня, импланты, снаряжение, транспорт."""
+    from backend import inventory, body, crafting, vehicles as vehicles_mod
     catalog = []
     for key, data in inventory.WEAPONS.items():
         catalog.append({
@@ -717,15 +718,20 @@ def shop_catalog():
             "category": "cyberware", "price": data.get("price", 0),
             "slot": data.get("slot", "none"),
         })
-    for key, data in inventory.COMPONENTS.items():
-        catalog.append({
-            "key": key, "name": data.get("name", key),
-            "category": "component", "price": data.get("price", 0),
-        })        
     for key, data in inventory.GEAR.items():
         catalog.append({
             "key": key, "name": data.get("name", key),
             "category": "gear", "price": data.get("price", 0),
+        })
+    for key, data in inventory.COMPONENTS.items():
+        catalog.append({
+            "key": key, "name": data.get("name", key),
+            "category": "component", "price": data.get("price", 0),
+        })
+    for key, data in vehicles_mod.VEHICLES.items():
+        catalog.append({
+            "key": key, "name": data.get("name", key),
+            "category": "vehicle", "price": data.get("price", 0),
         })
     return catalog
  
@@ -775,3 +781,51 @@ def repair_endpoint(sid: str, player: str, req: RepairIn):
                               actor["skills"].get("basic_tech", 0), 13)
     result = crafting.repair_item(actor, req.item, mech["total"])
     return {"mechanics": mech, **result} 
+    
+class VehicleIn(BaseModel):
+    vehicle: str
+
+
+@app.post("/session/{sid}/player/{player}/vehicle/board")
+def vehicle_board(sid: str, player: str, req: VehicleIn):
+    from backend import vehicles
+    st = SESSIONS.get(sid)
+    if not st:
+        raise HTTPException(404)
+    actor = next((p for p in st["players"] if p["name"] == player), None)
+    if not actor:
+        raise HTTPException(404, "no such player")
+    result = vehicles.board_vehicle(actor, req.vehicle)
+    if not result["success"]:
+        raise HTTPException(400, result["reason"])
+    return result
+
+
+@app.post("/session/{sid}/player/{player}/vehicle/exit")
+def vehicle_exit(sid: str, player: str):
+    from backend import vehicles
+    st = SESSIONS.get(sid)
+    if not st:
+        raise HTTPException(404)
+    actor = next((p for p in st["players"] if p["name"] == player), None)
+    if not actor:
+        raise HTTPException(404, "no such player")
+    result = vehicles.exit_vehicle(actor)
+    if not result["success"]:
+        raise HTTPException(400, result["reason"])
+    return result
+
+
+@app.post("/session/{sid}/player/{player}/vehicle/buy")
+def vehicle_buy(sid: str, player: str, req: VehicleIn):
+    from backend import vehicles
+    st = SESSIONS.get(sid)
+    if not st:
+        raise HTTPException(404)
+    actor = next((p for p in st["players"] if p["name"] == player), None)
+    if not actor:
+        raise HTTPException(404, "no such player")
+    result = vehicles.buy_vehicle(actor, req.vehicle)
+    if not result["success"]:
+        raise HTTPException(400, result["reason"])
+    return result
