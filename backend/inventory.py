@@ -27,8 +27,20 @@ GEAR = {
     "radio": {"name": "Рация", "category": "gear", "price": 100},
 }
 
+COMPONENTS = {
+    "scrap_metal": {"name": "Металлолом", "category": "component", "price": 10},
+    "springs": {"name": "Пружины", "category": "component", "price": 15},
+    "electronics": {"name": "Электроника", "category": "component", "price": 40},
+    "plastics": {"name": "Пластик", "category": "component", "price": 12},
+    "chemicals": {"name": "Химикаты", "category": "component", "price": 30},
+    "optics": {"name": "Оптика", "category": "component", "price": 60},
+    "weapon_parts": {"name": "Оружейные запчасти", "category": "component", "price": 50},
+    "armor_plates": {"name": "Бронепластины", "category": "component", "price": 45},
+}
+
 # Сколько слотов занимает предмет по категории
 ITEM_SLOTS = {
+    "component": 0,   # компоненты не занимают слоты (хранятся в мастерской)    
     "pistol": 1,
     "rifle": 2,
     "melee": 1,
@@ -61,6 +73,9 @@ def item_info(key):
 
     if key in GEAR:
         return dict(GEAR[key])
+
+    if key in COMPONENTS:
+        return dict(COMPONENTS[key])
 
     return {
         "name": key,

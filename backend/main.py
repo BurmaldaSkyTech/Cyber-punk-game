@@ -8,6 +8,7 @@ from typing import Optional
 import uuid, json, os, re
 from pathlib import Path
 
+from backend import inventory, body, crafting
 from . import substances
 from . import netrunning
 from . import db, engine, scenario, chargen
@@ -716,9 +717,61 @@ def shop_catalog():
             "category": "cyberware", "price": data.get("price", 0),
             "slot": data.get("slot", "none"),
         })
+    for key, data in inventory.COMPONENTS.items():
+        catalog.append({
+            "key": key, "name": data.get("name", key),
+            "category": "component", "price": data.get("price", 0),
+        })        
     for key, data in inventory.GEAR.items():
         catalog.append({
             "key": key, "name": data.get("name", key),
             "category": "gear", "price": data.get("price", 0),
         })
     return catalog
+ 
+
+class CraftIn(BaseModel):
+    recipe: str
+
+
+class RepairIn(BaseModel):
+    item: str
+
+
+@app.post("/session/{sid}/player/{player}/craft")
+def craft_endpoint(sid: str, player: str, req: CraftIn):
+    from backend import crafting
+    st = SESSIONS.get(sid)
+    if not st:
+        raise HTTPException(404)
+    actor = next((p for p in st["players"] if p["name"] == player), None)
+    if not actor:
+        raise HTTPException(404, "no such player")
+
+    recipe = crafting.get_recipe(req.recipe)
+    if not recipe:
+        raise HTTPException(400, "Неизвестный рецепт")
+
+    skill_key = recipe["skill"]
+    stat = actor["stats"].get("TECH", 2)
+    skill = actor["skills"].get(skill_key, 0)
+    mech = engine.skill_check(stat, skill, recipe["dv"])
+
+    result = crafting.attempt_craft(actor, req.recipe, mech["total"])
+    return {"mechanics": mech, "recipe": req.recipe, **result}
+
+
+@app.post("/session/{sid}/player/{player}/repair")
+def repair_endpoint(sid: str, player: str, req: RepairIn):
+    from backend import crafting
+    st = SESSIONS.get(sid)
+    if not st:
+        raise HTTPException(404)
+    actor = next((p for p in st["players"] if p["name"] == player), None)
+    if not actor:
+        raise HTTPException(404, "no such player")
+
+    mech = engine.skill_check(actor["stats"].get("TECH", 2),
+                              actor["skills"].get("basic_tech", 0), 13)
+    result = crafting.repair_item(actor, req.item, mech["total"])
+    return {"mechanics": mech, **result} 

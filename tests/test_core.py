@@ -420,3 +420,43 @@ def test_substances_apply_poison():
     assert result["success"] is True
     assert result["damage"] > 0
     assert ch["hp"] < 20
+    
+def test_craft_missing_components():
+    from backend import crafting
+
+    ch = {"inventory": []}
+    result = crafting.attempt_craft(ch, "pipe_shotgun", 20)
+    assert result["success"] is False
+    assert "компонент" in result["reason"].lower()
+
+
+def test_craft_success():
+    from backend import crafting
+
+    ch = {"inventory": ["scrap_metal", "scrap_metal", "springs", "weapon_parts"]}
+    result = crafting.attempt_craft(ch, "pipe_shotgun", 15)
+    assert result["success"] is True
+    assert "shotgun" in ch["inventory"]
+    assert ch["inventory"].count("scrap_metal") == 0
+
+
+def test_craft_fail_consumes_components():
+    from backend import crafting
+
+    ch = {"inventory": ["scrap_metal", "scrap_metal", "springs", "weapon_parts"]}
+    result = crafting.attempt_craft(ch, "pipe_shotgun", 5)
+    assert result["success"] is False
+    assert ch["inventory"].count("scrap_metal") == 0
+    assert "shotgun" not in ch["inventory"]
+
+
+def test_repair_item():
+    from backend import crafting
+
+    ch = {"inventory": ["heavy_pistol"], "broken_items": ["heavy_pistol"]}
+    result = crafting.repair_item(ch, "heavy_pistol", 15)
+    assert result["success"] is True
+    assert ch["broken_items"] == []
+
+    result = crafting.repair_item(ch, "heavy_pistol", 15)
+    assert result["success"] is False    
