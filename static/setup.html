@@ -7,7 +7,7 @@
 <style>
   * { box-sizing: border-box; }
   body { font-family: 'Segoe UI', sans-serif; background: #0a0a0f; color: #e0e0e5; margin: 0; padding: 20px; }
-  .container { max-width: 900px; margin: 0 auto; }
+  .container { max-width: 1000px; margin: 0 auto; }
   h1 { color: #ff2a6d; text-shadow: 0 0 10px #ff2a6d; text-align: center; }
   .step-title { color: #05d9e8; font-size: 1.4em; margin-bottom: 10px; }
   .panel { background: #12121a; border: 1px solid #333; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
@@ -52,9 +52,114 @@
   button.btn.secondary:hover { background: #555; }
   button.btn:disabled { background: #444; cursor: not-allowed; }
   .name-input { width: 100%; background: #0a0a0f; color: #fff; border: 1px solid #444; padding: 12px; border-radius: 6px; font-size: 1.1em; margin-bottom: 15px; }
-  .summary { white-space: pre-wrap; font-family: monospace; background: #0a0a0f; padding: 15px; border-radius: 6px; font-size: 0.9em; max-height: 300px; overflow-y: auto; }
+  .summary { white-space: pre-wrap; font-family: monospace; background: #0a0a0f; padding: 15px; border-radius: 6px; font-size: 0.9em; max-height: 400px; overflow-y: auto; }
   .error-msg { color: #f66; background: #2a1a1a; padding: 12px; border-radius: 6px; margin-top: 10px; }
   .hidden { display: none; }
+
+  /* === СТИЛИ МАГАЗИНА === */
+  .eb-display {
+    background: #0a0a0f;
+    border: 2px solid #05d9e8;
+    border-radius: 8px;
+    padding: 15px;
+    text-align: center;
+    font-size: 1.3em;
+    margin-bottom: 20px;
+    color: #05d9e8;
+  }
+  .shop-category {
+    background: #1a1a25;
+    border-radius: 6px;
+    padding: 15px;
+    margin-bottom: 15px;
+  }
+  .shop-category h3 {
+    color: #ff2a6d;
+    margin: 0 0 10px 0;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #333;
+  }
+  .shop-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    background: #12121a;
+    border-radius: 4px;
+    margin-bottom: 6px;
+    border: 1px solid #333;
+  }
+  .shop-item .item-name {
+    flex: 2;
+    color: #e0e0e5;
+  }
+  .shop-item .item-price {
+    flex: 1;
+    text-align: right;
+    color: #ffcc00;
+    font-weight: bold;
+  }
+  .shop-item button {
+    background: #05d9e8;
+    color: #000;
+    border: none;
+    padding: 6px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+  }
+  .shop-item button:hover { background: #04b8c3; }
+  .shop-item button:disabled { background: #444; color: #888; cursor: not-allowed; }
+  .inventory-section {
+    background: #1a2a1a;
+    border: 2px solid #0f0;
+    border-radius: 8px;
+    padding: 15px;
+    margin-top: 20px;
+  }
+  .inventory-section h3 {
+    color: #0f0;
+    margin: 0 0 10px 0;
+  }
+  .inventory-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: #12121a;
+    border-radius: 4px;
+    margin-bottom: 4px;
+    border-left: 3px solid #05d9e8;
+  }
+  .inventory-item.starter {
+    border-left-color: #ffcc00;
+    opacity: 0.9;
+  }
+  .inventory-item button {
+    background: #f66;
+    color: #fff;
+    border: none;
+    padding: 4px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .inventory-item.starter button {
+    display: none;
+  }
+  .shop-legend {
+    font-size: 0.85em;
+    color: #888;
+    margin-top: 10px;
+    padding: 10px;
+    background: #0a0a0f;
+    border-radius: 4px;
+  }
+  .slots-info {
+    text-align: right;
+    color: #888;
+    font-size: 0.9em;
+    margin-bottom: 10px;
+  }
 </style>
 </head>
 <body>
@@ -113,12 +218,39 @@
     <ul class="pickup-list" id="pickupList"></ul>
     <div class="nav-buttons">
       <button class="btn secondary" onclick="goStep(3)">← Назад</button>
+      <button class="btn" onclick="goStep(5)">Далее →</button>
+    </div>
+  </div>
+
+  <!-- ШАГ 5: МАГАЗИН -->
+  <div class="panel hidden" id="step-5">
+    <div class="step-title">Шаг 5: Магазин снаряжения</div>
+    <div class="eb-display">
+      Баланс: <span id="shopEb">0</span> eb
+    </div>
+    <div class="slots-info">
+      Слоты инвентаря: <span id="slotInfo">0 / 0</span>
+    </div>
+    <div id="shopCatalog"></div>
+
+    <div class="inventory-section">
+      <h3>Ваш инвентарь</h3>
+      <div id="inventoryList"></div>
+    </div>
+
+    <div class="shop-legend">
+      <b>Стартовое снаряжение</b> (выдаётся бесплатно, нельзя продать)<br>
+      <b>Покупки</b> списываются из баланса. Купленное можно вернуть до начала игры.
+    </div>
+
+    <div class="nav-buttons">
+      <button class="btn secondary" onclick="goStep(4)">← Назад</button>
       <button class="btn" onclick="finishChar()">Готово ✓</button>
     </div>
   </div>
 
   <!-- ИТОГ / СТАРТ -->
-  <div class="panel hidden" id="step-5">
+  <div class="panel hidden" id="step-6">
     <div class="step-title">Готово! Проверь персонажей и запускай игру</div>
     <div id="summaryContainer"></div>
     <div class="error-msg hidden" id="startError"></div>
@@ -130,6 +262,8 @@
 </div>
 
 <script>
+// ============ ДАННЫЕ ПО РОЛЯМ ============
+
 const ROLES = {
   "Rockerboy": ["performance","persuasion","human_perception","acting"],
   "Solo": ["handgun","melee_weapon","evasion","athletics"],
@@ -142,45 +276,124 @@ const ROLES = {
   "Nomad": ["drive_land_vehicle","land_vehicle_tech","endurance","perception"],
   "Fixer": ["streetwise","persuasion","conversation","trading"]
 };
+
 const ROLE_DESC = {
   "Rockerboy": "Музыкант-бунтарь", "Solo": "Наёмник/боец", "Netrunner": "Хакер",
   "Tech": "Механик/изобретатель", "Medtech": "Медик", "Media": "Журналист",
   "Lawman": "Коп", "Exec": "Корпоративный агент", "Nomad": "Кочевник", "Fixer": "Посредник"
 };
+
+// Стартовая валюта по роли
+const ROLE_EB = {
+  "Rockerboy": 1000, "Solo": 1500, "Netrunner": 1500, "Tech": 1200,
+  "Medtech": 1200, "Media": 1000, "Lawman": 1500, "Exec": 2000,
+  "Nomad": 1000, "Fixer": 1200
+};
+
+// Стартовое снаряжение по роли (выдаётся бесплатно)
+const ROLE_STARTER = {
+  "Rockerboy": {weapon: "heavy_pistol", armor: "leathers", items: ["electric_guitar","stylish_clothes"], cyberware: ["Neural Link","Basic Cyberaudio"]},
+  "Solo": {weapon: "heavy_pistol", armor: "light_armorjack", items: ["knife","armored_jacket"], cyberware: ["Neural Link","Basic Cyberoptic"]},
+  "Netrunner": {weapon: "medium_pistol", armor: "leathers", items: ["cyberdeck","agent","interface_plugs"], cyberware: ["Neural Link","Interface Plugs"]},
+  "Tech": {weapon: "medium_pistol", armor: "leathers", items: ["toolkit","tech_goggles"], cyberware: ["Neural Link","Basic Cyberaudio"]},
+  "Medtech": {weapon: "medium_pistol", armor: "leathers", items: ["medscanner","trauma_bag","airhypo"], cyberware: ["Neural Link","Basic Cyberaudio"]},
+  "Media": {weapon: "medium_pistol", armor: "leathers", items: ["recorder_drone","press_badge","camera"], cyberware: ["Neural Link","Basic Cyberoptic"]},
+  "Lawman": {weapon: "heavy_pistol", armor: "kevlar", items: ["badge","radio","restraints"], cyberware: ["Neural Link","Basic Cyberoptic"]},
+  "Exec": {weapon: "heavy_pistol", armor: "leathers", items: ["corpo_badge","credit_chip","corporate_suit"], cyberware: ["Neural Link","Basic Cyberaudio"]},
+  "Nomad": {weapon: "shotgun", armor: "kevlar", items: ["roadbike_keys","tent","road_leathers"], cyberware: ["Neural Link","Basic Cyberoptic"]},
+  "Fixer": {weapon: "heavy_pistol", armor: "leathers", items: ["contact_list","burner_phone","stylish_clothes"], cyberware: ["Neural Link","Basic Cyberaudio"]}
+};
+
+// ============ КАТАЛОГ МАГАЗИНА ============
+
+const SHOP_CATALOG = {
+  "weapon": [
+    {key: "medium_pistol", name: "Средний пистолет (2d6)", price: 50},
+    {key: "heavy_pistol", name: "Тяжёлый пистолет (3d6)", price: 100},
+    {key: "very_heavy_pistol", name: "Очень тяжёлый пистолет (4d6)", price: 150},
+    {key: "smg", name: "Пистолет-пулемёт (3d6, авто)", price: 300},
+    {key: "assault_rifle", name: "Штурмовая винтовка (5d6, авто)", price: 500},
+    {key: "shotgun", name: "Дробовик (5d6)", price: 150},
+    {key: "sniper_rifle", name: "Снайперская винтовка (5d6)", price: 1000},
+    {key: "knife", name: "Нож (1d6)", price: 10},
+    {key: "machete", name: "Мачете (2d6)", price: 20},
+    {key: "bat", name: "Бита (2d6)", price: 10},
+    {key: "axe", name: "Топор (3d6)", price: 30},
+    {key: "grenade", name: "Граната (6d6 AoE)", price: 100},
+  ],
+  "armor": [
+    {key: "leathers", name: "Кожаная куртка (SP 4)", price: 20},
+    {key: "kevlar", name: "Кевлар (SP 7)", price: 100},
+    {key: "light_armorjack", name: "Лёгкая броня (SP 11)", price: 200},
+    {key: "metalgear", name: "Металлическая броня (SP 12)", price: 300},
+    {key: "medium_armorjack", name: "Средняя броня (SP 12)", price: 300},
+    {key: "heavy_armorjack", name: "Тяжёлая броня (SP 14)", price: 500},
+    {key: "flak", name: "Флак-жилет (SP 15)", price: 600},
+    {key: "bodyplate", name: "Бронекостюм (SP 18)", price: 1000},
+  ],
+  "cyberware": [
+    {key: "Neural Link", name: "Нейролинк", price: 100, slot: "brain"},
+    {key: "Interface Plugs", name: "Интерфейсные разъёмы", price: 200, slot: "brain"},
+    {key: "Basic Cyberoptic", name: "Базовый киберглаз", price: 200, slot: "eye"},
+    {key: "Basic Cyberaudio", name: "Базовый киберслух", price: 150, slot: "ear"},
+    {key: "Chipware Socket", name: "Разъём для чипов", price: 500, slot: "brain"},
+    {key: "Subdermal Pocket", name: "Подкожный карман", price: 300, slot: "body"},
+    {key: "Skinweave", name: "Бронированная кожа (SP 4)", price: 800, slot: "body"},
+    {key: "Cyberarm", name: "Киберрука", price: 500, slot: "arm"},
+    {key: "Cyberleg", name: "Кибернога", price: 500, slot: "leg"},
+    {key: "Sandevistan", name: "Сандевистан (+REF)", price: 2000, slot: "brain"},
+    {key: "Kerenzikov", name: "Керензиков (+уклонение)", price: 1500, slot: "brain"},
+  ],
+  "gear": [
+    {key: "medkit", name: "Мед-аптечка", price: 100},
+    {key: "toolkit", name: "Набор инструментов", price: 200},
+    {key: "cam_jammer", name: "Глушилка камер", price: 500},
+    {key: "fake_pass", name: "Фальшивый пропуск", price: 300},
+    {key: "grapnel", name: "Крюк-кошка с тросом", price: 100},
+    {key: "radio", name: "Рация", price: 100},
+    {key: "agent", name: "Агент (ИИ-помощник)", price: 500},
+    {key: "techbag", name: "Тех-сумка", price: 150},
+  ],
+};
+
+// Слоты предметов для расчёта инвентаря
+const ITEM_SLOTS = {
+  weapon: 1, armor: 0, cyberware: 0, gear: 1
+};
+
+const CATEGORY_NAMES = {
+  weapon: "Оружие", armor: "Броня",
+  cyberware: "Киберимпланты", gear: "Снаряжение"
+};
+
+// ============ СТАНДАРТНЫЕ ДАННЫЕ ============
+
 const STATS = ["INT","REF","DEX","TECH","COOL","WILL","LUCK","MOVE","BODY","EMP"];
 const STAT_POOL = 62;
+
 const SKILLS = [
-  // INT (16)
   "accounting", "conceal_reveal_object", "criminology", "cryptography",
   "deduction", "education", "gamble", "language", "library_search",
   "lip_reading", "local_expert", "perception", "science", "tactics",
   "tracking", "wilderness_survival",
-  // REF (15)
   "brawling", "contortionist", "dance", "drive_land_vehicle",
   "drive_sea_vehicle", "evasion", "handgun", "heavy_weapons",
   "martial_arts", "melee_weapon", "pilot_air_vehicle",
   "pilot_sea_vehicle", "riding", "shoulder_arms", "stealth",
-  // TECH (15)
   "air_vehicle_tech", "basic_tech", "cybertech", "demolitions",
   "electronics_security_tech", "first_aid", "forgery",
   "land_vehicle_tech", "paint_draw_photography", "paramedic",
   "pharmaceuticals", "pick_lock", "pick_pocket", "sea_vehicle_tech",
   "weaponstech",
-  // COOL (10)
   "acting", "bribery", "conversation", "human_perception",
   "interrogation", "persuasion", "personal_grooming", "streetwise",
   "trading", "wardrobe_style",
-  // EMP (1)
   "performance",
-  // WILL (3)
   "concentration", "endurance", "resist_torture_drugs",
-  // BODY (1)
-  "athletics",
-  // MOVE (1)
-  "stealth_move",
-  // Netrunner (2)
+  "athletics", "stealth_move",
   "interface", "programming"
 ];
+
 const LIFEPATH = {
   "cultural_origins": ["North American","South American","Western European","Eastern European",
     "Middle Eastern","North African","Sub-Saharan African","South Asian","Southeast Asian","East Asian","Oceania/Pacific"],
@@ -196,19 +409,49 @@ const LIFEPATH = {
     "Family exiled you","No crisis — stable childhood"]
 };
 
+// ============ СОСТОЯНИЕ ============
+
 let players = [null, null];
 let current = 0;
-let draft = { name:"", role:null, stats:{}, lifepath:{}, career:{}, pickups:[], pickup_pool:10 };
+let draft = makeEmptyDraft();
+
+function makeEmptyDraft() {
+  return {
+    name: "", role: null, stats: {}, lifepath: {},
+    career: {}, pickups: [], pickup_pool: 10,
+    eb: 0, starter_items: [], purchased_items: [],
+    starter_cyberware: []
+  };
+}
+
+function initDraftForRole(role) {
+  if (!role) return;
+  const eb = ROLE_EB[role] || 1000;
+  const starter = ROLE_STARTER[role];
+  draft.eb = eb;
+  draft.starter_items = [
+    {key: starter.weapon, category: "weapon"},
+    {key: starter.armor, category: "armor"},
+    ...starter.items.map(k => ({key: k, category: "gear"}))
+  ];
+  draft.starter_cyberware = [...starter.cyberware];
+  draft.purchased_items = [];
+}
+
+// ============ УПРАВЛЕНИЕ ИГРОКАМИ ============
 
 function switchPlayer(i) {
   saveDraft();
   current = i;
-  document.querySelectorAll('.tab').forEach((t,idx)=>{
-    t.classList.toggle('active', idx===i);
-    t.classList.toggle('done', players[idx]!==null && idx!==i);
+  document.querySelectorAll('.tab').forEach((t, idx) => {
+    t.classList.toggle('active', idx === i);
+    t.classList.toggle('done', players[idx] !== null && idx !== i);
   });
-  if (players[i]) { draft = JSON.parse(JSON.stringify(players[i])); }
-  else { draft = { name:"", role:null, stats:{}, lifepath:{}, career:{}, pickups:[], pickup_pool:10 }; }
+  if (players[i]) {
+    draft = JSON.parse(JSON.stringify(players[i]));
+  } else {
+    draft = makeEmptyDraft();
+  }
   renderAll();
   goStep(1);
 }
@@ -218,9 +461,15 @@ function saveDraft() {
   players[current] = JSON.parse(JSON.stringify(draft));
 }
 
+// ============ РЕНДЕРИНГ ============
+
 function renderAll() {
   document.getElementById('charname').value = draft.name || "";
-  renderRoles(); renderStats(); renderLifepath(); renderSkills();
+  renderRoles();
+  renderStats();
+  renderLifepath();
+  renderSkills();
+  renderShop();
 }
 
 function renderRoles() {
@@ -228,9 +477,16 @@ function renderRoles() {
   g.innerHTML = '';
   for (const r in ROLES) {
     const c = document.createElement('div');
-    c.className = 'role-card' + (draft.role===r ? ' selected' : '');
+    c.className = 'role-card' + (draft.role === r ? ' selected' : '');
     c.innerHTML = `<b>${r}</b><small>${ROLE_DESC[r]}</small>`;
-    c.onclick = () => { draft.role = r; renderRoles(); renderSkills(); };
+    c.onclick = () => {
+      const roleChanged = draft.role !== r;
+      draft.role = r;
+      if (roleChanged) initDraftForRole(r);
+      renderRoles();
+      renderSkills();
+      renderShop();
+    };
     g.appendChild(c);
   }
 }
@@ -244,7 +500,7 @@ function renderStats() {
     box.className = 'stat-box';
     box.innerHTML = `<label>${s}</label><input type="number" min="2" max="8" value="${draft.stats[s]}">`;
     box.querySelector('input').onchange = (e) => {
-      draft.stats[s] = parseInt(e.target.value)||2;
+      draft.stats[s] = parseInt(e.target.value) || 2;
       updatePool();
     };
     g.appendChild(box);
@@ -253,13 +509,13 @@ function renderStats() {
 }
 
 function updatePool() {
-  let sum = STATS.reduce((a,s)=>a+(draft.stats[s]||2), 0);
+  let sum = STATS.reduce((a, s) => a + (draft.stats[s] || 2), 0);
   let left = STAT_POOL - sum;
   const info = document.getElementById('poolInfo');
   const btn = document.getElementById('btn-to-3');
-  if (left === 0) { info.textContent = "Все 62 очка распределены ✓"; info.className="pool-info ok"; btn.disabled=false; }
-  else if (left > 0) { info.textContent = `Осталось: ${left}`; info.className="pool-info warn"; btn.disabled=true; }
-  else { info.textContent = `Превышение на ${-left}`; info.className="pool-info err"; btn.disabled=true; }
+  if (left === 0) { info.textContent = "Все 62 очка распределены ✓"; info.className = "pool-info ok"; btn.disabled = false; }
+  else if (left > 0) { info.textContent = `Осталось: ${left}`; info.className = "pool-info warn"; btn.disabled = true; }
+  else { info.textContent = `Превышение на ${-left}`; info.className = "pool-info err"; btn.disabled = true; }
 }
 
 function renderLifepath() {
@@ -275,14 +531,16 @@ function renderLifepath() {
       "childhood_environment": "Детство",
       "family_crisis": "Семейный кризис"
     }[key];
-    const options = opts.map((o,i)=>`<option value="${o}" ${draft.lifepath[key]===o?'selected':''}>${o}</option>`).join('');
+    const options = opts.map(o =>
+      `<option value="${o}" ${draft.lifepath[key] === o ? 'selected' : ''}>${o}</option>`
+    ).join('');
     sec.innerHTML = `<b>${label}</b><div class="lifepath-row">
       <select>${options}</select>
       <button type="button">🎲 2d6</button></div>`;
     const sel = sec.querySelector('select');
     sel.onchange = () => { draft.lifepath[key] = sel.value; };
     sec.querySelector('button').onclick = () => {
-      const d1 = 1+Math.floor(Math.random()*6), d2 = 1+Math.floor(Math.random()*6);
+      const d1 = 1 + Math.floor(Math.random() * 6), d2 = 1 + Math.floor(Math.random() * 6);
       const idx = d1 + d2 - 2;
       sel.value = opts[idx];
       draft.lifepath[key] = opts[idx];
@@ -299,22 +557,22 @@ function renderSkills() {
     const item = document.createElement('div');
     item.className = 'skill-item';
     const val = draft.career[sk] || 2;
-    item.innerHTML = `<span>${sk}</span><select><option value="2" ${val===2?'selected':''}>2</option><option value="3" ${val===3?'selected':''}>3</option></select>`;
+    item.innerHTML = `<span>${sk}</span><select><option value="2" ${val === 2 ? 'selected' : ''}>2</option><option value="3" ${val === 3 ? 'selected' : ''}>3</option></select>`;
     item.querySelector('select').onchange = (e) => { draft.career[sk] = parseInt(e.target.value); };
     cs.appendChild(item);
   }
   const ps = document.getElementById('pickupSkill');
-  ps.innerHTML = SKILLS.map(s=>`<option value="${s}">${s}</option>`).join('');
+  ps.innerHTML = SKILLS.map(s => `<option value="${s}">${s}</option>`).join('');
   renderPickups();
 }
 
 function addPickup() {
   const sk = document.getElementById('pickupSkill').value;
-  const rank = parseInt(document.getElementById('pickupRank').value)||1;
+  const rank = parseInt(document.getElementById('pickupRank').value) || 1;
   if (rank > draft.pickup_pool) { alert("Не хватает очков"); return; }
-  const existing = draft.pickups.find(p=>p.skill===sk);
+  const existing = draft.pickups.find(p => p.skill === sk);
   if (existing) { existing.rank += rank; }
-  else { draft.pickups.push({skill: sk, rank}); }
+  else { draft.pickups.push({ skill: sk, rank }); }
   draft.pickup_pool -= rank;
   renderPickups();
 }
@@ -324,36 +582,151 @@ function renderPickups() {
   list.innerHTML = '';
   for (const p of draft.pickups) {
     const li = document.createElement('li');
-    li.innerHTML = `<span>${p.skill} (${p.rank})</span><button>✕</button>`;
+    li.innerHTML = `<span>${p.skill} (+${p.rank})</span><button>✕</button>`;
     li.querySelector('button').onclick = () => {
       draft.pickup_pool += p.rank;
-      draft.pickups = draft.pickups.filter(x=>x!==p);
+      draft.pickups = draft.pickups.filter(x => x !== p);
       renderPickups();
     };
     list.appendChild(li);
   }
   const info = document.getElementById('pickupPool');
   info.textContent = `Осталось: ${draft.pickup_pool}`;
-  info.className = 'pool-info ' + (draft.pickup_pool===0?'ok':(draft.pickup_pool>0?'warn':'err'));
+  info.className = 'pool-info ' + (draft.pickup_pool === 0 ? 'ok' : (draft.pickup_pool > 0 ? 'warn' : 'err'));
 }
 
+// ============ МАГАЗИН ============
+
+function computeInventorySlots() {
+  const body = draft.stats.BODY || 5;
+  return 5 + body;
+}
+
+function usedSlots() {
+  let total = 0;
+  for (const item of (draft.starter_items || [])) {
+    total += ITEM_SLOTS[item.category] || 0;
+  }
+  for (const item of (draft.purchased_items || [])) {
+    total += ITEM_SLOTS[item.category] || 0;
+  }
+  return total;
+}
+
+function buyItem(key, category, price) {
+  if (!draft.eb && draft.eb !== 0) initDraftForRole(draft.role);
+  if (draft.eb < price) {
+    alert("Недостаточно эдди");
+    return;
+  }
+  // Проверка уникальности оружия/брони (не дублируем)
+  if (category === "weapon" || category === "armor") {
+    const allItems = [...(draft.starter_items || []), ...(draft.purchased_items || [])];
+    if (allItems.some(i => i.key === key)) {
+      alert("Этот предмет уже есть");
+      return;
+    }
+  }
+  // Ограничение слотов
+  if (usedSlots() + (ITEM_SLOTS[category] || 0) > computeInventorySlots()) {
+    alert("Инвентарь переполнен");
+    return;
+  }
+  draft.eb -= price;
+  draft.purchased_items.push({ key, category, price });
+  renderShop();
+}
+
+function sellItem(index) {
+  const item = draft.purchased_items[index];
+  if (!item) return;
+  draft.eb += item.price;
+  draft.purchased_items.splice(index, 1);
+  renderShop();
+}
+
+function renderShop() {
+  document.getElementById('shopEb').textContent = draft.eb || 0;
+  document.getElementById('slotInfo').textContent =
+    `${usedSlots()} / ${computeInventorySlots()}`;
+
+  // Каталог
+  const catalog = document.getElementById('shopCatalog');
+  catalog.innerHTML = '';
+  for (const cat of Object.keys(SHOP_CATALOG)) {
+    const sec = document.createElement('div');
+    sec.className = 'shop-category';
+    sec.innerHTML = `<h3>${CATEGORY_NAMES[cat]}</h3>`;
+    for (const item of SHOP_CATALOG[cat]) {
+      const row = document.createElement('div');
+      row.className = 'shop-item';
+      const disabled = draft.eb < item.price ? ' disabled' : '';
+      row.innerHTML = `
+        <span class="item-name">${item.name}</span>
+        <span class="item-price">${item.price}eb</span>
+        <button${disabled}>Купить</button>
+      `;
+      row.querySelector('button').onclick = () => buyItem(item.key, cat, item.price);
+      sec.appendChild(row);
+    }
+    catalog.appendChild(sec);
+  }
+
+  // Инвентарь
+  const inv = document.getElementById('inventoryList');
+  inv.innerHTML = '';
+
+  // Стартовое снаряжение
+  for (const item of (draft.starter_items || [])) {
+    const row = document.createElement('div');
+    row.className = 'inventory-item starter';
+    row.innerHTML = `<span>⭐ ${item.key} (стартовое)</span><span style="color:#888">—</span>`;
+    inv.appendChild(row);
+  }
+  // Стартовые импланты
+  for (const ware of (draft.starter_cyberware || [])) {
+    const row = document.createElement('div');
+    row.className = 'inventory-item starter';
+    row.innerHTML = `<span>⭐ ${ware} (имплант)</span><span style="color:#888">—</span>`;
+    inv.appendChild(row);
+  }
+  // Купленное
+  draft.purchased_items.forEach((item, idx) => {
+    const row = document.createElement('div');
+    row.className = 'inventory-item';
+    row.innerHTML = `
+      <span>${item.key} (${CATEGORY_NAMES[item.category]})</span>
+      <button>Прдать (${item.price}eb)</button>
+    `;
+    row.querySelector('button').onclick = () => sellItem(idx);
+    inv.appendChild(row);
+  });
+
+  if ((draft.starter_items || []).length === 0 && (draft.purchased_items || []).length === 0) {
+    inv.innerHTML = '<div style="color:#888;padding:10px;">Выбери роль на шаге 1</div>';
+  }
+}
+
+// ============ НАВИГАЦИЯ ============
+
 function goStep(n) {
-  if (n===2 && !draft.role) { alert("Выбери роль"); return; }
-  document.querySelectorAll('.panel').forEach(p=>p.classList.add('hidden'));
-  document.getElementById('step-'+n).classList.remove('hidden');
-  if (n===2) updatePool();
+  if (n === 2 && !draft.role) { alert("Выбери роль"); return; }
+  document.querySelectorAll('.panel').forEach(p => p.classList.add('hidden'));
+  document.getElementById('step-' + n).classList.remove('hidden');
+  if (n === 2) updatePool();
+  if (n === 5) renderShop();
 }
 
 function finishChar() {
   if (!draft.role) { alert("Выбери роль"); return; }
-  if (!draft.name) { draft.name = `Игрок ${current+1}`; }
+  if (!draft.name) { draft.name = `Игрок ${current + 1}`; }
   saveDraft();
-  document.querySelectorAll('.tab').forEach((t,idx)=>{
-    t.classList.toggle('done', players[idx]!==null);
+  document.querySelectorAll('.tab').forEach((t, idx) => {
+    t.classList.toggle('done', players[idx] !== null);
   });
   if (players[0] && players[1]) { showSummary(); }
   else {
-    const other = current===0 ? 1 : 0;
+    const other = current === 0 ? 1 : 0;
     if (!players[other]) {
       if (confirm("Перейти к созданию второго игрока?")) switchPlayer(other);
       else showSummary();
@@ -362,17 +735,23 @@ function finishChar() {
 }
 
 function showSummary() {
-  document.querySelectorAll('.panel').forEach(p=>p.classList.add('hidden'));
-  document.getElementById('step-5').classList.remove('hidden');
+  document.querySelectorAll('.panel').forEach(p => p.classList.add('hidden'));
+  document.getElementById('step-6').classList.remove('hidden');
   const c = document.getElementById('summaryContainer');
   c.innerHTML = '';
-  for (let i=0; i<2; i++) {
+  for (let i = 0; i < 2; i++) {
     const p = players[i];
-    if (!p) { c.innerHTML += `<div class="summary">Игрок ${i+1}: не создан</div>`; continue; }
-    const s = `Игрок ${i+1}: ${p.name} [${p.role}]
-Статы: ${STATS.map(x=>x+' '+(p.stats[x]||2)).join(', ')}
-Карьерные: ${Object.entries(p.career).map(([k,v])=>k+' '+v).join(', ')}
-Доп: ${p.pickups.map(x=>x.skill+' '+x.rank).join(', ')||'—'}
+    if (!p) { c.innerHTML += `<div class="summary">Игрок ${i + 1}: не создан</div>`; continue; }
+    const allItems = [...(p.starter_items || []), ...(p.purchased_items || [])];
+    const itemsStr = allItems.map(x => x.key).join(', ') || '—';
+    const cyberStr = (p.starter_cyberware || []).join(', ') || '—';
+    const s = `Игрок ${i + 1}: ${p.name} [${p.role}]
+Статы: ${STATS.map(x => x + ' ' + (p.stats[x] || 2)).join(', ')}
+Карьерные: ${Object.entries(p.career).map(([k, v]) => k + ' ' + v).join(', ')}
+Доп: ${p.pickups.map(x => x.skill + ' +' + x.rank).join(', ') || '—'}
+Эдди: ${p.eb || 0}eb
+Импланты: ${cyberStr}
+Снаряжение: ${itemsStr}
 Предыстория: ${Object.values(p.lifepath).join(' | ')}`;
     c.innerHTML += `<div class="summary">${s}</div>`;
   }
@@ -385,9 +764,11 @@ async function startGame() {
     // Догенерировать отсутствующих игроков случайными
     for (let i = 0; i < 2; i++) {
       if (!players[i]) {
-        const r = await fetch('/chargen', {method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({mode:'random'})});
+        const r = await fetch('/chargen', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: 'random' })
+        });
         players[i] = await r.json();
       }
     }
@@ -406,11 +787,34 @@ async function startGame() {
         }
         const stats = {};
         for (const s of STATS) stats[s] = (p.stats && p.stats[s]) || 2;
+
+        // Оружие и броня: из стартового снаряжения
+        let weapon = null, armor = null;
+        const inventory = [];
+        for (const item of (p.starter_items || [])) {
+          if (item.category === "weapon" && !weapon) weapon = item.key;
+          else if (item.category === "armor" && !armor) armor = item.key;
+          else if (item.category === "gear") inventory.push(item.key);
+        }
+        for (const item of (p.purchased_items || [])) {
+          if (item.category === "weapon" && !weapon) weapon = item.key;
+          else if (item.category === "armor" && !armor) armor = item.key;
+          else if (item.category === "gear" || item.category === "weapon") {
+            inventory.push(item.key);
+          }
+        }
+
         full = {
           name: p.name, role: p.role, stats: stats, skills: skills,
           hp: stats.BODY * 2, max_hp: stats.BODY * 2,
           wound: "unharmed", dsp: 0, dead: false,
-          humanity: stats.EMP * 10, lifepath: p.lifepath || {}
+          humanity: stats.EMP * 10, lifepath: p.lifepath || {},
+          eb: p.eb || 0,
+          weapon: weapon,
+          armor: armor,
+          inventory: inventory,
+          cyberware: p.starter_cyberware || [],
+          ability: (ROLE_STARTER[p.role] || {}).ability || null,
         };
       }
       fullPlayers.push(full);
@@ -418,11 +822,13 @@ async function startGame() {
 
     // Валидация полных персонажей
     for (let i = 0; i < 2; i++) {
-      const v = await fetch('/chargen/validate', {method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify(fullPlayers[i])}).then(r => r.json());
+      const v = await fetch('/chargen/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(fullPlayers[i])
+      }).then(r => r.json());
       if (!v.valid) {
-        errBox.textContent = `Игрок ${i+1}: ${v.problems.join('; ')}`;
+        errBox.textContent = `Игрок ${i + 1}: ${v.problems.join('; ')}`;
         errBox.classList.remove('hidden');
         return;
       }
@@ -434,14 +840,16 @@ async function startGame() {
       heat: 1,
       clocks: {},
       npcs: [
-        {id:"kessler", name:"Фиксер Кесслер", hp:15, max_hp:15, wound:"unharmed", armor:"leathers"},
-        {id:"guard1", name:"Телохранитель Кесслера 1", hp:24, max_hp:24, wound:"unharmed", armor:"kevlar"},
-        {id:"guard2", name:"Телохранитель Кесслера 2", hp:24, max_hp:24, wound:"unharmed", armor:"kevlar"}
+        { id: "kessler", name: "Фиксер Кесслер", hp: 15, max_hp: 15, wound: "unharmed", armor: "leathers" },
+        { id: "guard1", name: "Телохранитель Кесслера 1", hp: 24, max_hp: 24, wound: "unharmed", armor: "kevlar" },
+        { id: "guard2", name: "Телохранитель Кесслера 2", hp: 24, max_hp: 24, wound: "unharmed", armor: "kevlar" }
       ]
     };
-    const r = await fetch('/session', {method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({players: fullPlayers, scenario: scenario})});
+    const r = await fetch('/session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ players: fullPlayers, scenario: scenario })
+    });
     const d = await r.json();
     localStorage.setItem('sid', d.id);
     window.location.href = '/?sid=' + d.id;
@@ -451,27 +859,24 @@ async function startGame() {
     console.error(e);
   }
 }
-// init
+
+// ============ ИНИЦИАЛИЗАЦИЯ ============
+
 renderAll();
+
 // === ВОССТАНОВЛЕНИЕ СЕССИИ ПРИ ЗАГРУЗКЕ ===
 window.addEventListener('load', async () => {
   const sid = localStorage.getItem('sid');
-  if (!sid) return;  // нет сохранённой сессии — показываем блок выбора
+  if (!sid) return;
   try {
     const r = await fetch(`/session/${sid}`);
     if (!r.ok) {
-      localStorage.removeItem('sid');  // сессия мертва (сервер перезапускался)
+      localStorage.removeItem('sid');
       return;
     }
     const st = await r.json();
-    // Сессия жива — сразу входим в игру
-    window.sid = sid;
-    document.getElementById('setup').classList.add('hidden');
-    document.getElementById('game').classList.remove('hidden');
-    document.getElementById('log').innerHTML = '';
-    addLog(`Сессия ${sid} восстановлена. Ходит: ${st.order[st.turn]}`, 'mech');
-    currentPlayer = st.order[st.turn];
-    setTurn();
+    // Сессия жива — редиректим в игру
+    window.location.href = '/?sid=' + sid;
   } catch (e) {
     localStorage.removeItem('sid');
   }

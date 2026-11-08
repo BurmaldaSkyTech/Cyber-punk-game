@@ -225,21 +225,26 @@ def random_character(rng=None, role=None, seed=None):
     skills = _alloc_skills(rng, role)
     name = rng.choice(HANDLES)
     role_data = ROLES[role]
-
-    # 1. Старые 4 таблицы (броски 2d6 из LIFEPATH_TABLES внутри chargen)
+    
+    # Lifepath (старые + новые таблицы)
     lifepath = _roll_lifepath(rng)
-
-    # 2. Новые general-таблицы из lifepath_tables.json
     general = LIFEPATH_DATA.get("general", {})
     for key, options in general.items():
         if options and key not in lifepath:
             lifepath[key] = rng.choice(options)
-
-    # 3. Role-specific таблицы из JSON
     role_lp = LIFEPATH_DATA.get("role_specific", {}).get(role, {})
     for key, options in role_lp.items():
         if options:
             lifepath[f"role_{key}"] = rng.choice(options)
+
+    # Инвентарь из стартового снаряжения
+    inventory = []
+    if role_data.get("weapon"):
+        inventory.append(role_data["weapon"])
+    if role_data.get("armor"):
+        inventory.append(role_data["armor"])
+    for item in role_data.get("items", []):
+        inventory.append(item)
 
     ch = {
         "name": name, "role": role,
@@ -251,10 +256,11 @@ def random_character(rng=None, role=None, seed=None):
         "weapon": role_data["weapon"],
         "gear": role_data["items"],
         "cyberware": role_data["starting_cyberware"],
-        "eb": STARTING_EB[role],
+        "eb": STARTING_EB.get(role, 1000),
         "style": rng.choice(STYLES),
         "ability": role_data["ability"],
         "lifepath": lifepath,
+        "inventory": inventory,
     }
     return ch
 
@@ -285,16 +291,38 @@ def validate_character(ch):
     return problems
 
 
-def manual_character(payload):
-    ch = dict(payload)
-    ch.setdefault("wound", "unharmed")
-    ch.setdefault("dsp", 0)
-    ch.setdefault("dead", False)
-    st = ch.get("stats", {})
-    # Достраиваем недостающие статы до минимума (2)
-    for s in STATS:
-        st.setdefault(s, STAT_MIN)
-    ch["stats"] = st
-    ch["hp"] = ch.get("hp", st.get("BODY", 4) * 2)
-    ch["max_hp"] = ch.get("max_hp", st.get("BODY", 4) * 2)
-    return ch, validate_character(ch)
+def manual_character(data):
+    """Создаёт персонажа из ручных данных (от веб-редактора)."""
+    role = data["role"]
+    stats = data["stats"]
+    skills = data["skills"]
+    name = data["name"]
+
+    # Инвентарь: если пришёл готовый, используем его; иначе собираем из weapon/armor
+    if "inventory" in data:
+        inventory = list(data["inventory"])
+    else:
+        inventory = []
+        if data.get("weapon"):
+            inventory.append(data["weapon"])
+        if data.get("armor"):
+            inventory.append(data["armor"])
+        for item in data.get("gear", []):
+            inventory.append(item)
+
+    ch = {
+        "name": name, "role": role,
+        "stats": stats, "skills": skills,
+        "hp": stats["BODY"] * 2, "max_hp": stats["BODY"] * 2,
+        "wound": "unharmed", "dsp": 0, "dead": False,
+        "humanity": stats.get("EMP", 5) * 10,
+        "armor": data.get("armor"),
+        "weapon": data.get("weapon"),
+        "gear": data.get("gear", []),
+        "cyberware": data.get("cyberware", []),
+        "eb": data.get("eb", STARTING_EB.get(role, 1000)),
+        "ability": ROLES[role]["ability"],
+        "lifepath": data.get("lifepath", {}),
+        "inventory": inventory,
+    }
+    return ch

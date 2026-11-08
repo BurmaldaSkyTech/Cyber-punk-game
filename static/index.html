@@ -258,6 +258,9 @@ async function send() {
       body: JSON.stringify({player: currentPlayer, text: action})});
     if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.detail || `HTTP ${r.status}`); }
     const d = await r.json();
+    if (!d || typeof d !== 'object') {
+      throw new Error('Сервер вернул пустой ответ (null). Ветка act() без return — смотри лог сервера.');
+    }
     if (d.mechanics) {
       const m = d.mechanics;
       if (m.no_roll) { addLog(`[без броска] свободное действие`, 'mech'); }
