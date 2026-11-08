@@ -8,6 +8,7 @@ from typing import Optional
 import uuid, json, os, re
 from pathlib import Path
 
+from . import substances
 from . import netrunning
 from . import db, engine, scenario, chargen
 from .llm import chat_json
@@ -72,6 +73,8 @@ JUDGE_SYS = """Ты — механический интерпретатор пр
 === ПРИОРИТЕТЫ (проверяй СНАЧАЛА, сверху вниз) ===
 
 1. АТАКА: выстрел, удар, бросок гранаты → attack_ranged / attack_melee.
+   - Если игрок использует приём боевого искусства (удар ногой, блок, подсечка, бросок, разоружение, удушение) — добавь поле "move": "название_приёма" (например, "high_kick", "sweep", "throw").
+   - Список доступных приёмов зависит от стиля персонажа (martial_arts навык 2+).
 2. ВЗЛОМ: сеть, электроника, замки, камеры → hack или skill.
 3. СОЦИАЛКА (если есть ЛЮБОЕ из): обращение к NPC по имени, просьба ("дай", "одолжи", "можно", "разреши", "покажи", "расскажи"), вопрос NPC ("расскажи", "объясни", "а что если"), убеждение, торг, ложь, лесть → social.
    ВАЖНО: если игрок говорит "дай X и мы пойдём" / "одолжи Y на дело" / "покажи контракт" — это ВСЁ ЕЩЁ social, потому что главное — просьба/приказ, а "пойдём" лишь аргумент.
@@ -96,6 +99,8 @@ JUDGE_SYS = """Ты — механический интерпретатор пр
 "взламываю электронный замок двери" -> {"action_type":"skill","skill":"electronics_security_tech","dv_key":"professional","weapon":null,"target":null,"second":null,"query":"security tech check"}
 "Отправляемся." (одиночная команда, без NPC) -> {"action_type":"free","skill":null,"dv_key":null,"weapon":null,"target":null,"second":null,"query":null}
 "Встаю и иду к выходу." (физическое действие без просьб) -> {"action_type":"free","skill":null,"dv_key":null,"weapon":null,"target":null,"second":null,"query":null}
+"делаю подсечку" -> {"action_type":"attack_melee","skill":"martial_arts","dv_key":"difficult","weapon":null,"move":"sweep","target":"guard1","second":null,"query":"martial arts sweep"}
+"бросаю противника через бедро" -> {"action_type":"attack_melee","skill":"martial_arts","dv_key":"professional","weapon":null,"move":"throw","target":"guard1","second":null,"query":"martial arts throw"}
 
 dv_key: тривиально -> everyday; настороже -> difficult; защита -> professional; на грани -> heroic.
 skill строго из списка персонажа.
@@ -200,6 +205,33 @@ class ChargenIn(BaseModel):
     seed: Optional[int] = None
     manual: Optional[dict] = None
 
+class UseIn(BaseModel):
+    item: str
+
+
+@app.post("/session/{sid}/player/{player}/use")
+def use_item_endpoint(sid: str, player: str, req: UseIn):
+    from backend import substances, inventory
+    st = SESSIONS.get(sid)
+    if not st:
+        raise HTTPException(404)
+    actor = next((p for p in st["players"] if p["name"] == player), None)
+    if not actor:
+        raise HTTPException(404, "no such player")
+    
+    # Проверяем, есть ли предмет в инвентаре
+    if not inventory.has_item(actor, req.item):
+        raise HTTPException(400, "Предмета нет в инвентаре")
+    
+    # Применяем вещество
+    result = substances.apply_substance(actor, req.item)
+    if not result["success"]:
+        raise HTTPException(400, result["reason"])
+    
+    # Убираем предмет из инвентаря
+    inventory.remove_item(actor, req.item)
+    
+    return result
 
 @app.get("/")
 def index():
@@ -447,7 +479,13 @@ def _act_core(sid: str, req: ActionIn):
     if mech.get("hack_result") == "entered":
         net_context = (f"\nНЕТРАННИНГ: {actor_name} вошёл в сеть '{mech.get('architecture')}'. "
                       f"Этаж {mech.get('floor')}/{mech.get('max_floors')}, DV {mech.get('dv')}.") 
- 
+                      
+
+    # Тик активных эффектов наркотиков
+    for p in st["players"]:
+        expired = substances.tick_effects(p)
+        if expired:
+            st["flags"].append(f"effect_expired:{','.join(expired)}") 
 
     user_msg = (
         f"ДЕЙСТВУЕТ: {actor_name}\n"

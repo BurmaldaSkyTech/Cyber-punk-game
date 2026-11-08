@@ -272,3 +272,151 @@ def test_inventory_buy_item():
     result = inventory.buy_item(ch, "heavy_pistol")
     assert result["success"] is False
     assert ch["eb"] == 70 
+ 
+def test_netrunning_enter_architecture():
+    from backend import netrunning
+    
+    # Персонаж с Interface Plugs
+    ch = {
+        "stats": {"INT": 6},
+        "cyberware": ["Interface Plugs"],
+        "cyberdeck": "basic_deck",
+    }
+    
+    result = netrunning.enter_architecture(ch, "simple")
+    assert result["success"] is True
+    assert result["floor"] == 1
+    assert result["max_floors"] == 2
+    
+    # Персонаж без Interface Plugs
+    ch2 = {
+        "stats": {"INT": 6},
+        "cyberware": ["Neural Link"],
+    }
+    
+    result = netrunning.enter_architecture(ch2, "simple")
+    assert result["success"] is False
+    assert "Interface" in result["reason"]
+
+
+def test_netrunning_use_program():
+    from backend import netrunning
+    
+    # Атакующая программа
+    result = netrunning.use_program(None, "see_ya")
+    assert result["success"] is True
+    assert result["type"] == "attack"
+    assert result["damage"] >= 0
+    
+    # Защитная программа
+    result = netrunning.use_program(None, "armor")
+    assert result["success"] is True
+    assert result["type"] == "defense"
+    assert result["sp"] > 0
+    
+    # Неизвестная программа
+    result = netrunning.use_program(None, "unknown_program")
+    assert result["success"] is False
+
+
+def test_netrunning_calculate_stats():
+    from backend import netrunning
+    
+    ch = {
+        "stats": {"INT": 7},
+        "cyberdeck": "standard_deck",
+    }
+    
+    stats = netrunning.calculate_net_stats(ch)
+    assert stats["speed"] == 9  # 7 + 2
+    assert stats["mu_total"] == 6 
+ 
+def test_martial_can_use_style():
+    from backend import martial
+    
+    # Персонаж с martial_arts 3
+    ch = {"skills": {"martial_arts": 3}}
+    ok, reason = martial.can_use_style(ch, "Karate")
+    assert ok is True
+    
+    # Персонаж без навыка
+    ch2 = {"skills": {"martial_arts": 0}}
+    ok, reason = martial.can_use_style(ch2, "Karate")
+    assert ok is False
+    assert "2+" in reason
+
+
+def test_martial_move_effect():
+    from backend import martial
+    
+    effect, desc = martial.get_move_effect("sweep")
+    assert effect == "sweep"
+    
+    effect, desc = martial.get_move_effect("throw")
+    assert effect == "throw"
+    
+    effect, desc = martial.get_move_effect("unknown_move")
+    assert effect is None
+
+
+def test_martial_list_styles():
+    from backend import martial
+    
+    styles = martial.list_styles()
+    assert "Karate" in styles
+    assert "Boxing" in styles
+    assert len(styles) >= 5 
+ 
+def test_substances_parse_effects():
+    from backend import substances
+
+    effects = substances.parse_effects("+2 REF, +1 COOL, +2 MOVE")
+    assert effects == {"REF": 2, "COOL": 1, "MOVE": 2}
+
+    effects = substances.parse_effects("+2 BODY, +2 WILL, -2 REF")
+    assert effects == {"BODY": 2, "WILL": 2, "REF": -2}
+
+
+def test_substances_apply_drug():
+    from backend import substances
+
+    ch = {
+        "stats": {"REF": 5, "COOL": 5, "MOVE": 5},
+        "hp": 10, "max_hp": 10,
+    }
+
+    result = substances.apply_substance(ch, "smash")
+    assert result["success"] is True
+    assert ch["stats"]["REF"] == 7
+    assert ch["stats"]["COOL"] == 6
+    assert len(ch["active_effects"]) == 1
+
+
+def test_substances_tick_effects():
+    from backend import substances
+
+    ch = {
+        "stats": {"REF": 7},
+        "active_effects": [
+            {"key": "smash", "effects": {"REF": 2}, "turns_left": 1, "withdrawal": ""}
+        ],
+    }
+
+    expired = substances.tick_effects(ch)
+    assert expired == ["smash"]
+    assert ch["stats"]["REF"] == 5
+    assert len(ch["active_effects"]) == 0
+
+
+def test_substances_apply_poison():
+    from backend import substances
+
+    ch = {
+        "stats": {"REF": 5, "DEX": 5},
+        "hp": 20, "max_hp": 20,
+    }
+
+    result = substances.apply_substance(ch, "toxin_medium")
+    assert result["success"] is True
+    assert result["damage"] > 0
+    assert ch["hp"] < 20
