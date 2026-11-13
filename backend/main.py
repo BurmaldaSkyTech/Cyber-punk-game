@@ -8,6 +8,10 @@ from typing import Optional
 import uuid, json, os, re
 from pathlib import Path
 
+import asyncio
+import string
+import random as _random
+from fastapi import WebSocket, WebSocketDisconnect
 from backend import inventory, body, crafting
 from . import substances
 from . import netrunning
@@ -16,9 +20,99 @@ from .llm import chat_json
 from .rag import RulesSearch
 from .common import clean, CJK
 from . import spawn
+from contextlib import asynccontextmanager
+
+class ConnectionManager:
+    """Хранит WebSocket-подключения по сессиям."""
+
+    def __init__(self):
+        self.conns = {}
+
+    async def connect(self, sid, ws, player):
+        await ws.accept()
+        self.conns.setdefault(sid, []).append((ws, player))
+
+    def disconnect(self, sid, ws):
+        if sid in self.conns:
+            self.conns[sid] = [c for c in self.conns[sid] if c[0] is not ws]
+
+    async def broadcast(self, sid, message):
+        for ws, _ in list(self.conns.get(sid, [])):
+            try:
+                await ws.send_json(message)
+            except Exception:
+                self.disconnect(sid, ws)
 
 
-app = FastAPI()
+manager = ConnectionManager()
+LOOP = None
+
+
+@asynccontextmanager
+async def lifespan(app):
+    global LOOP
+    LOOP = asyncio.get_event_loop()
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
+
+
+def broadcast_now(sid, message):
+    """Отправка WS-сообщения из синхронного эндпоинта."""
+    if LOOP is not None and manager.conns.get(sid):
+        asyncio.run_coroutine_threadsafe(manager.broadcast(sid, message), LOOP)
+
+
+def public_state(st):
+    """Состояние без секретов (токены не отдаём клиентам)."""
+    return {k: v for k, v in st.items() if k != "tokens"}
+
+
+def get_state(sid):
+    st = SESSIONS.get(sid)
+    if st is None:
+        st = db.load_session(sid)
+        if st:
+            SESSIONS[sid] = st
+    return st
+
+
+def persist(st):
+    SESSIONS[st["id"]] = st
+    db.save_session(st["id"], st)
+
+
+
+def find_by_code(code):
+    code = (code or "").strip().upper()
+    if not code:
+        return None
+    for st in SESSIONS.values():
+        if st.get("code") == code:
+            return st
+    for st in db.all_session_states():
+        if st.get("code") == code:
+            SESSIONS[st["id"]] = st
+            return st
+    return None
+
+
+DEFAULT_SCENARIO = {
+    "scene": ("Бар 'Ржавый болт', Ночной Город, 23:40. За угловым столом среди дыма и "
+              "неоновых бликов сидит фиксер Кесслер. За барной стойкой — два его "
+              "телохранителя в кевларе с тяжёлыми пистолетами под плащами. На столе у "
+              "Кесслера — стакан синтетического виски и дата-планшет с контрактом."),
+    "heat": 1, "clocks": {},
+    "npcs": [
+        {"id": "kessler", "name": "Фиксер Кесслер", "hp": 15, "max_hp": 15,
+         "wound": "unharmed", "armor": "leathers"},
+        {"id": "guard1", "name": "Телохранитель Кесслера 1", "hp": 24, "max_hp": 24,
+         "wound": "unharmed", "armor": "kevlar"},
+        {"id": "guard2", "name": "Телохранитель Кесслера 2", "hp": 24, "max_hp": 24,
+         "wound": "unharmed", "armor": "kevlar"},
+    ],
+}
 
 app.add_middleware(
     CORSMiddleware,
@@ -139,7 +233,12 @@ NARR_SYS_UNIVERSAL = """Ты — игровой мастер текстовой 
 
 2. Начни прямо с результата заявленного действия, не пересказывай сцену.
 
-3. УСПЕХ/ПРОВАЛ бери из РЕЗУЛЬТАТА. Если в ПОСЛЕДСТВИЯХ сказано "броня поглотила весь урон" — НЕТ раны и крови: описывай удар, искры, отдачу, но цель НЕ ранена.
+3. УСПЕХ/ПРОВАЛ бери из РЕЗУЛЬТАТА.
+   - Если РЕЗУЛЬТАТ = УСПЕХ, но в ПОСЛЕДСТВИЯХ сказано "броня поглотила весь урон" — цель НЕ ранена, но удар пришёлся.
+     Описывай: искры от брони, отдачу, контузию, цель шатается, но раны нет.
+     ❌ НЕ пиши "уворачивается", "промахивается", "уходит от удара".
+     ✅ ПРАВИЛЬНО: "Кулак Кулаковца бьёт в плечо охранника — kevlar глушит удар, но телохранитель шатается от силы удара."
+   - Если РЕЗУЛЬТАТ = ПРОВАЛ — цель уклонилась, удар прошёл мимо.
 
 4. ЗАПРЕЩЕНО копировать фразы из ПРИМЕРОВ и из блока ПРЕДЫДУЩИЕ ХОДЫ: каждый ход — новый кадр и новые формулировки.
 
@@ -199,6 +298,7 @@ class ActionIn(BaseModel):
     player: str
     text: str
     assist: Optional[str] = None
+    token: Optional[str] = None
 
 
 class RateIn(BaseModel):
@@ -321,9 +421,10 @@ def new_session(req: NewSession):
 
 @app.get("/session/{sid}")
 def get_session(sid: str):
-    if sid not in SESSIONS:
+    st = get_state(sid)
+    if not st:
         raise HTTPException(404)
-    return SESSIONS[sid]
+    return public_state(st)
 
 
 def clamp_suggestions(s, st):
@@ -350,13 +451,18 @@ def consequences(mech):
     items = [mech] + ([mech["second"]] if isinstance(mech.get("second"), dict) else [])
     for m in items:
         if m.get("damage") is not None:
-            if m.get("net_damage", 0) == 0 and not m.get("critical_injury"):
-                cons.append(f"- попадание по {m.get('target')}: броня поглотила ВЕСЬ урон "
-                            f"({m.get('armor_sp')} SP), цель НЕ ранена")
-            else:
-                cons.append(f"- попадание по {m.get('target')}: сквозь броню {m.get('net_damage')}"
+            net = m.get("net_damage", 0)
+            if net == 0 and not m.get("critical_injury"):
+                cons.append(f"- УСПЕШНОЕ попадание по {m.get('target')}: броня поглотила ВЕСЬ урон "
+                            f"(урон {m.get('damage')} - SP{m.get('armor_sp')} = 0), "
+                            f"цель НЕ ранена, но удар пришёлся")
+            elif net > 0:
+                cons.append(f"- УСПЕШНОЕ попадание по {m.get('target')}: сквозь броню {net}"
                             + (", КРИТ-ТРАВМА (+5 мимо брони)" if m.get("critical_injury") else "")
                             + f", у цели HP {m.get('target_hp')} ({m.get('target_wound')})")
+            else:
+                cons.append(f"- попадание по {m.get('target')}: урон {net}")
+    
     r = mech.get("npc_reaction")
     if r:
         if r["success"]:
@@ -364,14 +470,24 @@ def consequences(mech):
                         f"SP{r.get('armor_sp', 0)} = {r['net_damage']} по игроку")
         else:
             cons.append(f"- {r['npc']} контратакует и промахивается ({r['total']} vs DV{r['dv']})")
+    
     return "\n".join(cons) or "- урон не наносился"
 
 
 @app.post("/session/{sid}/action")
 def act(sid: str, req: ActionIn):
+    st = get_state(sid)
+    if not st:
+        raise HTTPException(404)
+
+    # Проверка токена ДО обработки действия
+    if st.get("tokens"):
+        if st["tokens"].get(req.player) != req.token:
+            raise HTTPException(403, "Неверный токен игрока")
+
     result = _act_core(sid, req)
+
     if result is None:
-        st = SESSIONS.get(sid)
         print(f"[ERROR] act() вернула None: sid={sid}, player={req.player}, text={req.text!r}")
         result = {
             "mechanics": {"action_type": "free", "no_roll": True},
@@ -381,8 +497,12 @@ def act(sid: str, req: ActionIn):
             "turn_no": (len(st["log"]) - 1) if st else 0,
             "turn_id": None,
             "next_player": st["order"][st["turn"]] if st else "",
-            "state": st,
+            "state": public_state(st),
         }
+
+    # Сохраняем и рассылаем ВСЕГДА (и успех, и fallback)
+    persist(st)
+    broadcast_now(sid, {"type": "state", "state": public_state(st)})
     return result
 
 
@@ -510,6 +630,13 @@ def _act_core(sid: str, req: ActionIn):
     if transport_lines or chase_line:
         transport_ctx = "\nТРАНСПОРТ В СЦЕНЕ:\n" + "\n".join(transport_lines) + chase_line + "\n"
 
+    # Явный флаг: успех, но броня поглотила
+    success_but_blocked = (
+        mech.get("success") 
+        and mech.get("net_damage", 0) == 0 
+        and mech.get("damage", 0) > 0
+    )
+
     user_msg = (
         f"ДЕЙСТВУЕТ: {actor_name}\n"
         f"ИГРОКИ В СЦЕНЕ: {players_names}\n"
@@ -526,6 +653,7 @@ def _act_core(sid: str, req: ActionIn):
         f"СМЫСЛ ДЕЙСТВИЯ: {ACTION_LABEL.get(mech.get('action_type'), 'действие')}\n"
         f"ФАКТЫ БРОСКА: {facts}\nРЕЗУЛЬТАТ: {outcome}\n"
         f"ПОСЛЕДСТВИЯ (обязательно соблюдать):\n{cons}\n"
+        + (f"ВНИМАНИЕ: УСПЕХ, но броня поглотила весь урон. Цель НЕ ранена, но удар пришёлся. НЕ пиши 'уворачивается'.\n" if success_but_blocked else "")        
         + (f"РАСКРОЙ ФАКТ СЕЙЧАС (обязательно вплести в реплику NPC конкретно):\n- {just_revealed}\n" if just_revealed else "")
         + (f"УЖЕ РАСКРЫТО РАНЬШЕ (не повторяй без вопроса):\n" + "\n".join("- " + b for b in st["revealed_beats"][:-1]) + "\n" if len(st["revealed_beats"]) > 1 else "")
         + (f"ФИЗИЧЕСКИ ВЫДАНО ИГРОКУ (на руках, учитывай в сценах):\n" + "\n".join("- " + g for g in st["granted"]) + "\n" if st.get("granted") else "")
@@ -669,6 +797,77 @@ class BuyIn(BaseModel):
 class InstallIn(BaseModel):
     ware: str
 
+class CreateLobby(BaseModel):
+    player_name: str
+    character: dict
+
+
+class JoinLobby(BaseModel):
+    code: str
+    player_name: str
+    character: dict
+
+
+@app.post("/lobby/create")
+def lobby_create(req: CreateLobby):
+    sid = uuid.uuid4().hex[:8]
+    code = "".join(_random.choices(string.ascii_uppercase + string.digits, k=6))
+    token = uuid.uuid4().hex
+
+    ch = dict(req.character)
+    ch["name"] = req.player_name
+
+    st = {
+        "id": sid, "code": code,
+        "scenario": DEFAULT_SCENARIO,
+        "heat": 1, "clocks": {}, "flags": [], "log": [],
+        "turn": 0, "threat": None,
+        "order": [ch["name"]],
+        "players": [ch],
+        "npcs": [dict(n) for n in DEFAULT_SCENARIO["npcs"]],
+        "revealed_beats": [], "granted": [],
+        "tokens": {ch["name"]: token},
+        "status": "lobby",
+        **scenario.init_scenario(),
+    }
+    persist(st)
+    return {"sid": sid, "code": code, "token": token, "state": public_state(st)}
+
+
+@app.post("/lobby/join")
+def lobby_join(req: JoinLobby):
+    st = find_by_code(req.code)
+    if not st:
+        raise HTTPException(404, "Комната не найдена")
+    if st.get("status") != "lobby":
+        raise HTTPException(400, "Игра уже началась")
+    if req.player_name in st["order"]:
+        raise HTTPException(400, "Имя занято")
+    if len(st["order"]) >= 4:
+        raise HTTPException(400, "Комната заполнена (максимум 4)")
+
+    token = uuid.uuid4().hex
+    ch = dict(req.character)
+    ch["name"] = req.player_name
+    st["players"].append(ch)
+    st["order"].append(ch["name"])
+    st["tokens"][ch["name"]] = token
+    persist(st)
+    broadcast_now(st["id"], {"type": "state", "state": public_state(st)})
+    return {"sid": st["id"], "token": token, "state": public_state(st)}
+
+
+@app.post("/lobby/{sid}/start")
+def lobby_start(sid: str, token: str):
+    st = get_state(sid)
+    if not st:
+        raise HTTPException(404)
+    if st["tokens"].get(st["order"][0]) != token:
+        raise HTTPException(403, "Только хост может начать игру")
+    st["status"] = "playing"
+    persist(st)
+    broadcast_now(sid, {"type": "state", "state": public_state(st)})
+    return {"ok": True, "state": public_state(st)}
 
 @app.post("/session/{sid}/player/{player}/buy")
 def buy_item_endpoint(sid: str, player: str, req: BuyIn):
@@ -852,3 +1051,22 @@ def vehicle_buy(sid: str, player: str, req: VehicleIn):
     if not result["success"]:
         raise HTTPException(400, result["reason"])
     return result
+ 
+@app.websocket("/ws/{sid}")
+async def ws_endpoint(websocket: WebSocket, sid: str,
+                      player: str = None, token: str = None):
+    st = get_state(sid)
+    if not st:
+        await websocket.close(code=4004)
+        return
+    if st.get("tokens") and token:
+        if st["tokens"].get(player) != token:
+            await websocket.close(code=4003)
+            return
+    await manager.connect(sid, websocket, player or "spectator")
+    try:
+        await websocket.send_json({"type": "state", "state": public_state(st)})
+        while True:
+            await websocket.receive_text()  # ping от клиента
+    except WebSocketDisconnect:
+        manager.disconnect(sid, websocket) 

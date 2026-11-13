@@ -543,3 +543,20 @@ def test_engine_ram_no_vehicle():
     mech = engine.resolve_check(state, actor, judge)
     assert mech.get("ram_result") == "no_vehicle"
     
+def test_public_state_hides_tokens():
+    from backend import main as m
+
+    st = {"id": "x", "tokens": {"A": "secret"}, "players": []}
+    pub = m.public_state(st)
+    assert "tokens" not in pub
+    assert pub["id"] == "x"
+
+
+def test_find_by_code():
+    from backend import main as m
+
+    m.SESSIONS.clear()
+    m.SESSIONS["abc"] = {"id": "abc", "code": "TEST01"}
+    assert m.find_by_code("test01")["id"] == "abc"
+    assert m.find_by_code("NOPE") is None
+    m.SESSIONS.clear()    
