@@ -9,13 +9,22 @@
   .container { max-width: 1700px; margin: 0 auto; }
   h1 { color: #ff2a6d; text-shadow: 0 0 10px #ff2a6d; }
 
-  /* === ТРЁХКОЛОНОЧНАЯ РАСКЛАДКА === */
+  /* === ЭКРАН ЛОББИ === */
+  .lobby-screen { max-width: 600px; margin: 40px auto; }
+  .lobby-box { background: #12121a; border: 1px solid #333; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+  .lobby-box h2 { color: #05d9e8; margin-top: 0; }
+  .lobby-input { width: 100%; padding: 12px; background: #1a1a25; color: #fff; border: 1px solid #444; border-radius: 4px; font-size: 1.1em; margin-bottom: 10px; box-sizing: border-box; }
+  .code-display { font-family: monospace; font-size: 2em; text-align: center; padding: 20px; background: #1a2a1a; border: 2px solid #0f0; border-radius: 8px; margin: 15px 0; letter-spacing: 8px; }
+  .player-list { list-style: none; padding: 0; }
+  .player-list li { padding: 10px; background: #1a1a25; border-radius: 4px; margin-bottom: 6px; border-left: 3px solid #05d9e8; }
+  .player-list li.host { border-left-color: #ff2a6d; }
+
+  /* === ИГРОВАЯ РАСКЛАДКА === */
   .game-layout { display: grid; grid-template-columns: 300px 1fr 300px; gap: 15px; align-items: start; }
   .sidebar { display: flex; flex-direction: column; gap: 12px; position: sticky; top: 20px; max-height: calc(100vh - 40px); overflow-y: auto; padding-right: 4px; }
   .sidebar::-webkit-scrollbar { width: 6px; }
   .sidebar::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
 
-  /* === ПАНЕЛИ ПЕРСОНАЖЕЙ === */
   .char-panel { background: #12121a; border: 1px solid #333; border-radius: 8px; padding: 12px; }
   .char-panel.active-turn { border: 2px solid #ff2a6d; box-shadow: 0 0 12px rgba(255,42,109,0.35); }
   .char-panel.dead { opacity: 0.5; }
@@ -30,12 +39,10 @@
   .stat-chip { display: inline-block; background: #1a1a25; border: 1px solid #333; border-radius: 4px; padding: 2px 6px; margin: 2px; font-size: 0.78em; }
   .stat-chip b { color: #05d9e8; }
 
-  /* === ЛОГ И ВВОД === */
   .log { background: #12121a; border: 1px solid #333; border-radius: 8px; padding: 15px; min-height: 300px; margin-bottom: 15px; overflow-y: auto; max-height: 68vh; }
   .entry { margin-bottom: 12px; padding: 10px; border-left: 3px solid #05d9e8; background: #1a1a25; white-space: pre-wrap; }
   .entry.mech { border-left-color: #ff2a6d; font-family: monospace; font-size: 0.9em; }
   .entry.narr { border-left-color: #05d9e8; }
-  .entry.rate { border-left-color: #ffd700; background: #1f1f15; }
   .turnbar { background: #1a1a25; border: 1px solid #05d9e8; border-radius: 8px; padding: 10px 15px; margin-bottom: 10px; font-size: 1.1em; }
   .turnbar b { color: #05d9e8; }
   input, textarea { background: #1a1a25; color: #e0e0e5; border: 1px solid #444; padding: 10px; border-radius: 4px; width: 100%; box-sizing: border-box; }
@@ -44,16 +51,11 @@
   button:disabled { background: #555; cursor: not-allowed; }
   button.secondary { background: #333; }
   button.secondary:hover { background: #555; }
-  .setup { background: #12121a; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
   .row { display: flex; gap: 10px; margin-top: 10px; }
   .row input { flex: 1; }
-  .rating { display: flex; gap: 5px; margin-top: 10px; }
-  .star { cursor: pointer; font-size: 1.5em; color: #444; }
-  .star.active { color: #ffd700; }
-  .hidden { display: none; }
   .err { color: #ff2a6d; margin-top: 8px; }
+  .hidden { display: none; }
 
-  /* === АДАПТИВ === */
   @media (max-width: 1100px) {
     .game-layout { grid-template-columns: 1fr; }
     .sidebar { position: static; max-height: none; }
@@ -64,17 +66,35 @@
 <div class="container">
   <h1>CYBERPUNK RED</h1>
 
-  <div class="setup" id="setup">
-    <h2>Новая сессия</h2>
-    <div class="row">
-      <input id="name" placeholder="Имя игрока" value="Игрок">
-    </div>
-    <div class="row">
-      <button onclick="start()">Быстрый старт (прегены)</button>
-      <button class="secondary" onclick="location.href='/setup'">Создать персонажей по правилам →</button>
+  <!-- === ЭКРАН ЛОББИ === -->
+  <div id="lobby">
+    <div class="lobby-screen">
+      <div class="lobby-box">
+        <h2>Создать комнату</h2>
+        <input class="lobby-input" id="host-name" placeholder="Ваше имя">
+        <button onclick="createRoom()">Создать</button>
+        <div class="err hidden" id="host-err"></div>
+      </div>
+
+      <div class="lobby-box">
+        <h2>Войти по коду</h2>
+        <input class="lobby-input" id="join-code" placeholder="Код комнаты (например: K7X2QF)">
+        <input class="lobby-input" id="join-name" placeholder="Ваше имя">
+        <button onclick="joinRoom()">Войти</button>
+        <div class="err hidden" id="join-err"></div>
+      </div>
+
+      <div class="lobby-box hidden" id="waiting-box">
+        <h2>Ожидание игроков</h2>
+        <div class="code-display" id="room-code"></div>
+        <p style="text-align:center;color:#888">Отправьте этот код другим игрокам</p>
+        <ul class="player-list" id="waiting-players"></ul>
+        <button onclick="startGame()" id="start-btn" class="hidden">Начать игру ▶</button>
+      </div>
     </div>
   </div>
 
+  <!-- === ИГРОВОЙ ЭКРАН === -->
   <div id="game" class="hidden">
     <div class="turnbar">Сейчас ходит: <b id="turnwho">—</b></div>
     <div class="game-layout">
@@ -82,23 +102,10 @@
       <div class="center-col">
         <div class="log" id="log"></div>
         <div class="row">
-          <input id="action" placeholder="Действие текущего ходящего..." onkeydown="if(event.key==='Enter')send()">
+          <input id="action" placeholder="Действие..." onkeydown="if(event.key==='Enter')send()">
           <button id="sendbtn" onclick="send()">Отправить</button>
         </div>
         <div class="err" id="err"></div>
-
-        <div id="rating" class="entry rate hidden">
-          <strong>Оцени нарратив:</strong>
-          <div class="rating" id="stars">
-            <span class="star" data-v="1">★</span>
-            <span class="star" data-v="2">★</span>
-            <span class="star" data-v="3">★</span>
-            <span class="star" data-v="4">★</span>
-            <span class="star" data-v="5">★</span>
-          </div>
-          <textarea id="edited" rows="3" placeholder="Если оценка <= 3 — напиши свой вариант (необязательно)" class="hidden"></textarea>
-          <button onclick="saveRate()" style="margin-top:10px">Сохранить</button>
-        </div>
       </div>
       <div class="sidebar" id="panel-right"></div>
     </div>
@@ -107,38 +114,136 @@
 
 <script>
 let sid = null;
-let lastTurnId = null;
-let currentPlayer = '';
-let busy = false;
+let token = null;
+let myName = null;
+let isHost = false;
+let ws = null;
+let currentState = null;
 
-const PREGENS = [
-  {name:"Вектор", role:"Solo",
-   stats:{INT:3,REF:7,DEX:4,TECH:3,COOL:5,WILL:4,LUCK:2,MOVE:5,BODY:6,EMP:3},
-   skills:{handgun:4,melee_weapon:3,evasion:3,athletics:3,perception:3},
-   hp:12,max_hp:12,wound:"unharmed",dsp:0,dead:false,armor:"light_armorjack",
-   weapon:"heavy_pistol", eb:1500, humanity:30,
-   cyberware:["Neural Link","Basic Cyberoptic"],
-   inventory:["heavy_pistol","light_armorjack","knife","armored_jacket"]},
-  {name:"Никс", role:"Netrunner",
-   stats:{INT:6,REF:4,DEX:3,TECH:5,COOL:4,WILL:4,LUCK:3,MOVE:4,BODY:4,EMP:4},
-   skills:{interface:4,programming:3,stealth:3,persuasion:3,perception:2},
-   hp:8,max_hp:8,wound:"unharmed",dsp:0,dead:false,armor:"leathers",
-   weapon:"medium_pistol", eb:1500, humanity:40,
-   cyberware:["Neural Link","Interface Plugs"],
-   inventory:["medium_pistol","leathers","cyberdeck","agent"]}
-];
+// ============ ЛОББИ ============
 
-const SCENARIO = {
-  scene: "Бар 'Ржавый болт', Ночной Город, 23:40. За угловым столом среди дыма и неоновых бликов сидит фиксер Кесслер. За барной стойкой — два его телохранителя в кевларе с тяжёлыми пистолетами под плащами. На столе у Кесслера — стакан синтетического виски и дата-планшет с контрактом.",
-  heat: 1, clocks: {},
-  npcs: [
-    {id:"kessler", name:"Фиксер Кесслер", hp:15, max_hp:15, wound:"unharmed", armor:"leathers"},
-    {id:"guard1", name:"Телохранитель Кесслера 1", hp:24, max_hp:24, wound:"unharmed", armor:"kevlar"},
-    {id:"guard2", name:"Телохранитель Кесслера 2", hp:24, max_hp:24, wound:"unharmed", armor:"kevlar"}
-  ]
-};
+async function createRoom() {
+  const name = document.getElementById('host-name').value.trim();
+  if (!name) return alert('Введите имя');
+  
+  // Создаём случайного персонажа
+  const r = await fetch('/chargen', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'});
+  const char = await r.json();
+  char.name = name;
+  
+  const resp = await fetch('/lobby/create', {method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({player_name: name, character: char})});
+  
+  if (!resp.ok) {
+    const e = await resp.json();
+    document.getElementById('host-err').textContent = e.detail || 'Ошибка';
+    document.getElementById('host-err').classList.remove('hidden');
+    return;
+  }
+  
+  const data = await resp.json();
+  sid = data.sid;
+  token = data.token;
+  myName = name;
+  isHost = true;
+  currentState = data.state;
+  
+  document.getElementById('room-code').textContent = data.code;
+  document.getElementById('waiting-box').classList.remove('hidden');
+  document.getElementById('start-btn').classList.remove('hidden');
+  updateWaitingList();
+  connectWS();
+}
 
-// ============ ПАНЕЛИ ПЕРСОНАЖЕЙ ============
+async function joinRoom() {
+  const code = document.getElementById('join-code').value.trim().toUpperCase();
+  const name = document.getElementById('join-name').value.trim();
+  if (!code || !name) return alert('Введите код и имя');
+  
+  const r = await fetch('/chargen', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'});
+  const char = await r.json();
+  char.name = name;
+  
+  const resp = await fetch('/lobby/join', {method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({code, player_name: name, character: char})});
+  
+  if (!resp.ok) {
+    const e = await resp.json();
+    document.getElementById('join-err').textContent = e.detail || 'Ошибка';
+    document.getElementById('join-err').classList.remove('hidden');
+    return;
+  }
+  
+  const data = await resp.json();
+  sid = data.sid;
+  token = data.token;
+  myName = name;
+  isHost = false;
+  currentState = data.state;
+  
+  document.getElementById('waiting-box').classList.remove('hidden');
+  document.getElementById('room-code').textContent = code;
+  updateWaitingList();
+  connectWS();
+}
+
+function updateWaitingList() {
+  const list = document.getElementById('waiting-players');
+  list.innerHTML = '';
+  for (let i = 0; i < currentState.players.length; i++) {
+    const p = currentState.players[i];
+    const li = document.createElement('li');
+    li.className = i === 0 ? 'host' : '';
+    li.textContent = p.name + ' [' + p.role + ']' + (i === 0 ? ' (хост)' : '');
+    list.appendChild(li);
+  }
+}
+
+async function startGame() {
+  const resp = await fetch(`/lobby/${sid}/start?token=${token}`, {method: 'POST'});
+  if (!resp.ok) {
+    const e = await resp.json();
+    alert(e.detail || 'Ошибка');
+  }
+}
+
+// ============ WEBSOCKET ============
+
+function connectWS() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${proto}//${location.host}/ws/${sid}?player=${encodeURIComponent(myName)}&token=${token}`);
+  
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === 'state') {
+      currentState = msg.state;
+      if (currentState.status === 'playing') {
+        enterGame();
+      } else {
+        updateWaitingList();
+      }
+    }
+  };
+  
+  ws.onclose = () => {
+    console.log('WS закрыт');
+  };
+}
+
+// ============ ИГРА ============
+
+function enterGame() {
+  document.getElementById('lobby').classList.add('hidden');
+  document.getElementById('game').classList.remove('hidden');
+  document.getElementById('log').innerHTML = '';
+  showSceneIntro();
+  renderPanels();
+}
+
+function showSceneIntro() {
+  const scene = currentState.scenario?.scene || '';
+  if (scene) addLog(`[СЦЕНА]\n${scene}`, 'narr');
+}
 
 function hpColor(pct) {
   if (pct > 50) return '#0f0';
@@ -149,17 +254,13 @@ function hpColor(pct) {
 function buildCharPanel(p, isActive) {
   const div = document.createElement('div');
   div.className = 'char-panel' + (isActive ? ' active-turn' : '') + (p.dead ? ' dead' : '');
-
   const maxHp = p.max_hp || 1;
   const hpPct = Math.max(0, Math.min(100, Math.round((p.hp || 0) / maxHp * 100)));
-  const stats = Object.entries(p.stats || {})
-    .map(([k, v]) => `<span class="stat-chip"><b>${k}</b> ${v}</span>`).join('');
-  const skills = Object.entries(p.skills || {})
-    .sort((a, b) => b[1] - a[1])
-    .map(([k, v]) => `${k} +${v}`).join(', ') || '—';
+  const stats = Object.entries(p.stats || {}).map(([k, v]) => `<span class="stat-chip"><b>${k}</b> ${v}</span>`).join('');
+  const skills = Object.entries(p.skills || {}).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} +${v}`).join(', ') || '—';
   const inv = (p.inventory || []).join(', ') || '—';
   const cyber = (p.cyberware || []).join(', ') || '—';
-
+  
   div.innerHTML = `
     <h3>${p.name} <span class="role">[${p.role}]</span>${p.dead ? ' ☠' : ''}</h3>
     <div class="hp-bar"><div class="hp-fill" style="width:${hpPct}%;background:${hpColor(hpPct)}"></div></div>
@@ -179,10 +280,10 @@ function buildCharPanel(p, isActive) {
   return div;
 }
 
-function buildNpcPanel(state) {
+function buildNpcPanel() {
   const div = document.createElement('div');
   div.className = 'char-panel';
-  const npcs = (state.npcs || []).map(n => {
+  const npcs = (currentState.npcs || []).map(n => {
     const maxHp = n.max_hp || 1;
     const pct = Math.max(0, Math.min(100, Math.round((n.hp || 0) / maxHp * 100)));
     return `<div style="margin-bottom:10px">
@@ -195,98 +296,60 @@ function buildNpcPanel(state) {
   return div;
 }
 
-function renderPanels(state) {
+function renderPanels() {
   const left = document.getElementById('panel-left');
   const right = document.getElementById('panel-right');
-  if (!left || !right) return;
   left.innerHTML = '';
   right.innerHTML = '';
-
-  const activeName = (state.order || [])[state.turn ?? 0];
-  const players = state.players || [];
-
+  
+  const activeName = (currentState.order || [])[currentState.turn ?? 0];
+  const players = currentState.players || [];
+  
   players.forEach((p, i) => {
     const panel = buildCharPanel(p, p.name === activeName);
     if (i % 2 === 0) left.appendChild(panel);
     else right.appendChild(panel);
   });
-
-  right.appendChild(buildNpcPanel(state));
-}
-
-// ============ ЛОГ И СЦЕНА ============
-
-function showSceneIntro(state) {
-  const scene = state.scenario?.scene || '';
-  if (scene) addLog(`[СЦЕНА]\n${scene}`, 'narr');
-}
-
-async function enterGame(sessionId, state) {
-  sid = sessionId;
-  localStorage.setItem('sid', sid);
-  document.getElementById('setup').classList.add('hidden');
-  document.getElementById('game').classList.remove('hidden');
-  document.getElementById('log').innerHTML = '';
-  currentPlayer = state.order[state.turn];
-  setTurn();
-  addLog(`Сессия ${sid}. Ходит: ${currentPlayer}`, 'mech');
-  showSceneIntro(state);
-  renderPanels(state);
-}
-
-async function start() {
-  const name = document.getElementById('name').value.trim() || 'Игрок';
-  const players = PREGENS.map(p => Object.assign({}, p, {name: p.name === 'Вектор' ? name : p.name}));
-  const r = await fetch('/session', {method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({players, scenario: SCENARIO})});
-  const d = await r.json();
-  await enterGame(d.id, d.state);
+  
+  right.appendChild(buildNpcPanel());
 }
 
 async function send() {
-  if (busy || !sid) return;
   const action = document.getElementById('action').value.trim();
   if (!action) return;
-  busy = true;
+  
+  document.getElementById('action').value = '';
   document.getElementById('sendbtn').disabled = true;
   document.getElementById('err').textContent = '';
-  document.getElementById('action').value = '';
-  addLog(`${currentPlayer}: ${action}`, 'mech');
+  
+  addLog(`${myName}: ${action}`, 'mech');
+  
   try {
-    const r = await fetch(`/session/${sid}/action`, {method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({player: currentPlayer, text: action})});
-    if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.detail || `HTTP ${r.status}`); }
-    const d = await r.json();
-    if (!d || typeof d !== 'object') {
-      throw new Error('Сервер вернул пустой ответ (null). Ветка act() без return — смотри лог сервера.');
+    const r = await fetch(`/session/${sid}/action`, {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({player: myName, text: action, token: token})});
+    
+    if (!r.ok) {
+      const e = await r.json().catch(() => ({}));
+      throw new Error(e.detail || `HTTP ${r.status}`);
     }
+    
+    const d = await r.json();
     if (d.mechanics) {
       const m = d.mechanics;
-      if (m.no_roll) { addLog(`[без броска] свободное действие`, 'mech'); }
-      else { addLog(`[механика] ${m.action_type} | ${m.stat_key}+${m.skill}: ${m.total} vs DV${m.dv} -> ${m.success?'УСПЕХ':'ПРОВАЛ'}`, 'mech'); }
+      if (m.no_roll) addLog(`[без броска] свободное действие`, 'mech');
+      else addLog(`[механика] ${m.action_type} | ${m.stat_key}+${m.skill}: ${m.total} vs DV${m.dv} -> ${m.success?'УСПЕХ':'ПРОВАЛ'}`, 'mech');
       if (m.damage != null) addLog(`цель ${m.target}: урон ${m.damage} - SP${m.armor_sp} = ${m.net_damage}`, 'mech');
-      if (m.critical_injury) addLog(`[критическая травма] ${m.critical_injury}`, 'mech');
-      if (m.death_save) addLog(`[бросок смерти] ${m.death_save.result}`, 'mech');
-      if (m.npc_reaction) { const nr=m.npc_reaction; addLog(`[ответ NPC] ${nr.npc}: ${nr.success?'попадание':'промах'}, урон по игроку ${nr.net_damage||0}`, 'mech'); }
+      if (m.npc_reaction) {
+        const nr = m.npc_reaction;
+        addLog(`[ответ NPC] ${nr.npc}: ${nr.success?'попадание':'промах'}, урон по игроку ${nr.net_damage||0}`, 'mech');
+      }
     }
     addLog(d.narration, 'narr');
-    if (d.state) renderPanels(d.state);
-    lastTurnId = d.turn_id;
-    currentPlayer = d.next_player;
-    setTurn();
-    if (lastTurnId) { document.getElementById('rating').classList.remove('hidden'); resetStars(); }
   } catch (e) {
     document.getElementById('err').textContent = 'Ошибка: ' + e.message;
   } finally {
-    busy = false;
     document.getElementById('sendbtn').disabled = false;
   }
-}
-
-function setTurn() {
-  document.getElementById('turnwho').textContent = currentPlayer;
-  document.getElementById('action').placeholder = `Действие для: ${currentPlayer}`;
 }
 
 function addLog(text, cls) {
@@ -296,48 +359,6 @@ function addLog(text, cls) {
   document.getElementById('log').appendChild(el);
   document.getElementById('log').scrollTop = document.getElementById('log').scrollHeight;
 }
-
-// ============ ОЦЕНКА ============
-
-let selectedRating = 0;
-document.querySelectorAll('.star').forEach(s => {
-  s.onclick = () => {
-    selectedRating = parseInt(s.dataset.v);
-    document.querySelectorAll('.star').forEach(x => x.classList.remove('active'));
-    for (let i=1; i<=selectedRating; i++) document.querySelector(`.star[data-v="${i}"]`).classList.add('active');
-    document.getElementById('edited').classList.toggle('hidden', selectedRating > 3);
-  };
-});
-function resetStars() {
-  selectedRating = 0;
-  document.querySelectorAll('.star').forEach(x => x.classList.remove('active'));
-  document.getElementById('edited').classList.add('hidden');
-  document.getElementById('edited').value = '';
-}
-async function saveRate() {
-  if (!selectedRating || !lastTurnId) return;
-  const edited = document.getElementById('edited').value.trim() || null;
-  await fetch(`/session/${sid}/turn/${lastTurnId}/rate`, {method:'POST',
-    headers:{'Content-Type':'application/json'}, body: JSON.stringify({rating: selectedRating, edited})});
-  document.getElementById('rating').classList.add('hidden');
-  resetStars();
-}
-
-// ============ ВОССТАНОВЛЕНИЕ СЕССИИ ============
-window.addEventListener('load', async () => {
-  const params = new URLSearchParams(window.location.search);
-  const urlSid = params.get('sid');
-  const storedSid = urlSid || localStorage.getItem('sid');
-  if (!storedSid) return;
-  try {
-    const r = await fetch(`/session/${storedSid}`);
-    if (!r.ok) { localStorage.removeItem('sid'); return; }
-    const st = await r.json();
-    await enterGame(storedSid, st);
-  } catch (e) {
-    localStorage.removeItem('sid');
-  }
-});
 </script>
 </body>
 </html>
