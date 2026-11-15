@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from typing import Optional
 import uuid, json, os, re
 from pathlib import Path
+from contextlib import asynccontextmanager
 
 import asyncio
 import string
@@ -51,7 +52,8 @@ LOOP = None
 @asynccontextmanager
 async def lifespan(app):
     global LOOP
-    LOOP = asyncio.get_event_loop()
+    LOOP = asyncio.get_running_loop()
+    print("[WS] event loop сохранён")
     yield
 
 
@@ -59,9 +61,13 @@ app = FastAPI(lifespan=lifespan)
 
 
 def broadcast_now(sid, message):
-    """Отправка WS-сообщения из синхронного эндпоинта."""
-    if LOOP is not None and manager.conns.get(sid):
-        asyncio.run_coroutine_threadsafe(manager.broadcast(sid, message), LOOP)
+    if LOOP is None:
+        print(f"[WARN] broadcast пропущен: LOOP is None (sid={sid})")
+        return
+    if not manager.conns.get(sid):
+        print(f"[WARN] broadcast пропущен: нет WS-подключений (sid={sid})")
+        return
+    asyncio.run_coroutine_threadsafe(manager.broadcast(sid, message), LOOP)
 
 
 def public_state(st):
@@ -269,6 +275,10 @@ NARR_SYS_UNIVERSAL = """Ты — игровой мастер текстовой 
 Используй ТОЛЬКО имена из блоков ДЕЙСТВУЕТ и NPC В СЦЕНЕ.
 ЗАПРЕЩЕНО придумывать или подставлять любые другие имена (Вектор, Никс и т.п.).
 Если имя персонажа — число или нестандартное слово, используй его БЕЗ склонения.
+Имя может содержать латиницу и цифры (например, FRJ5UQ). Пиши его ТОЧНО как в блоке ДЕЙСТВУЕТ:
+латиницей, без транслитерации в кириллицу, без сокращений и без отбрасывания символов.
+❌ "5 входит", "ФРЖУКВ" — ЗАПРЕЩЕНО
+✅ "FRJ5UQ входит в бар"
 
 Верни только JSON:
 {"narration": str, "questions": [str], "choices": [str],
@@ -337,6 +347,9 @@ def use_item_endpoint(sid: str, player: str, req: UseIn):
     
     # Убираем предмет из инвентаря
     inventory.remove_item(actor, req.item)
+    
+    persist(st)
+    broadcast_now(sid, {"type": "state", "state": public_state(st)})    
     
     return result
 
@@ -505,6 +518,35 @@ def act(sid: str, req: ActionIn):
     broadcast_now(sid, {"type": "state", "state": public_state(st)})
     return result
 
+import re
+
+ACT2_SCENE = ("Дата-узел Biotechnica, промзона sector 7, ночь. Серое здание без вывесок, "
+              "камеры на углах, патрули охраны по периметру. У служебного входа — кодовый "
+              "замок; северный забор уходит в слепую зону камер. Изнутри гудят серверные.")
+
+ACT2_TRIGGERS_WORDS = [
+    "отправляемся", "выдвигаемся", "уходим", "ухожу", "уйду", "идём", "идем",
+    "едем", "пошёл", "пошла", "пошли", "погнали", "прощается", "покидает",
+]
+NEG_DEPARTURE = ["не ухожу", "никуда не", "остаюсь", "остаёмся", "остаемся",
+                 "передумал", "передумала", "не пойду", "не идём", "не идем", "вернусь"]
+CONFIRM_YES = ["да", "подтверждаю", "уходим", "идём", "идем", "пошли", "погнали", "ухожу"]
+CONFIRM_NO = ["нет", "остаюсь", "остаёмся", "остаемся", "передумал", "передумала", "вернусь"]
+
+
+def detect_departure_intent(text):
+    """Определяет намерение уйти из бара.
+    
+    Возвращает (wants_to_leave, confirm_yes, confirm_no).
+    Отыгрыш в *звёздочках* игнорируется: жесты не переключают акт.
+    """
+    clean = re.sub(r"\*[^*]*\*", " ", text or "").lower()
+    words = re.findall(r"[a-zа-яё0-9]+", clean)
+    neg = any(n in clean for n in NEG_DEPARTURE)
+    leave = (not neg) and any(t in words for t in ACT2_TRIGGERS_WORDS)
+    yes = any(w in words for w in CONFIRM_YES)
+    no = any(w in words for w in CONFIRM_NO)
+    return leave, yes, no
 
 def _act_core(sid: str, req: ActionIn):
     st = SESSIONS.get(sid)
@@ -579,6 +621,9 @@ def _act_core(sid: str, req: ActionIn):
             st["revealed_beats"].append(just_revealed)
 
     act_type = st.get("act", "fixer")
+    do_transition = False
+    departure_question = False   # ← ДОБАВЬ ЭТУ СТРОКУ ЗДЕСЬ 
+ 
     act_ctx = {
         "fixer": (f"АКТ 1 (ТОРГ С ФИКСЕРОМ): раунд {st.get('fixer_round', 0)}, "
                   f"patience {st.get('patience', 4)}, контракт {st.get('contract', {})}"),
@@ -653,6 +698,9 @@ def _act_core(sid: str, req: ActionIn):
         f"СМЫСЛ ДЕЙСТВИЯ: {ACTION_LABEL.get(mech.get('action_type'), 'действие')}\n"
         f"ФАКТЫ БРОСКА: {facts}\nРЕЗУЛЬТАТ: {outcome}\n"
         f"ПОСЛЕДСТВИЯ (обязательно соблюдать):\n{cons}\n"
+        + (f"ВОПРОС-ПОДТВЕРЖДЕНИЕ: игрок заявил уход из бара, но ещё НЕ подтвердил его. "
+           f"В конце нарратива ОБЯЗАТЕЛЬНО задай вопрос: 'Уверены, что уходите? Контракт останется невыполненным.' "
+           f"НЕ описывай сам уход и НЕ покидай бар в этом ходе.\n" if departure_question else "")        
         + (f"ВНИМАНИЕ: УСПЕХ, но броня поглотила весь урон. Цель НЕ ранена, но удар пришёлся. НЕ пиши 'уворачивается'.\n" if success_but_blocked else "")        
         + (f"РАСКРОЙ ФАКТ СЕЙЧАС (обязательно вплести в реплику NPC конкретно):\n- {just_revealed}\n" if just_revealed else "")
         + (f"УЖЕ РАСКРЫТО РАНЬШЕ (не повторяй без вопроса):\n" + "\n".join("- " + b for b in st["revealed_beats"][:-1]) + "\n" if len(st["revealed_beats"]) > 1 else "")
@@ -715,39 +763,55 @@ def _act_core(sid: str, req: ActionIn):
                                              if g not in st.get("granted", [])]
 
     act_type = st.get("act", "fixer")
+    do_transition = False
+    departure_question = False
+
+    act_type = st.get("act", "fixer")
+    do_transition = False
+    departure_question = False
+
     if act_type == "fixer":
-        trigger_phrases = [req.text.lower(), (mech.get("_text", "") or "").lower()]
-        wants_to_leave = any(trig in phrase for phrase in trigger_phrases for trig in ACT2_TRIGGERS)
-        
+        leave, yes, no = detect_departure_intent(req.text)
+
         recent_logs = st["log"][-4:]
         fail_count = sum(1 for lg in recent_logs if lg.get("mech", {}).get("success") is False)
         patience_low = st.get("patience", 4) <= 0
         kessler_tired = fail_count >= 3 or patience_low
-        
-        if wants_to_leave or kessler_tired:
+
+        if st.get("pending_departure"):
+            if no:
+                st["pending_departure"] = False
+            elif yes or leave:
+                st["pending_departure"] = False
+                do_transition = True
+        elif kessler_tired:
+            do_transition = True
+        elif leave:
+            st["pending_departure"] = True
+            departure_question = True
+
+        if do_transition:
             scenario.advance_act(st)
             st["act"] = "recon"
             st["recon_slots"] = 3
             st["assets"] = []
-            
-            if wants_to_leave:
+            st["scenario"]["scene"] = ACT2_SCENE
+
+            if kessler_tired and not st.get("pending_departure"):
+                transition_narr = ("Кесслер нетерпеливо машет рукой: 'Хватит болтать, время идёт. "
+                                   "Идите и сделайте свою работу.' Он забирает планшет и уходит, "
+                                   "не оглядываясь.\n\n[ПЕРЕХОД К АКТУ 2: РЕКОГНОСЦИРОВКА]\n\n"
+                                   + ACT2_SCENE)
+            else:
                 transition_narr = ("Вы поднимаетесь из-за стола. Кесслер кивает на прощание: "
                                    "'Удачи. Не подведите.' Он сворачивает планшет и уходит вглубь бара.\n\n"
                                    "[ПЕРЕХОД К АКТУ 2: РЕКОГНОСЦИРОВКА]\n\n"
-                                   "Вы прибываете к дата-узлу Biotechnica в промзоне sector 7. "
-                                   "Серое здание, камеры на углах, патрули по периметру.")
-            else:
-                transition_narr = ("Кесслер нетерпеливо машет рукой: 'Хватит болтать, время идёт. "
-                                   "Идите и сделайте свою работу.' Он забирает планшет и уходит, "
-                                   "не оглядываясь.\n\n"
-                                   "[ПЕРЕХОД К АКТУ 2: РЕКОГНОСЦИРОВКА]\n\n"
-                                   "Вы прибываете к дата-узлу Biotechnica в промзоне sector 7. "
-                                   "Серое здание, камеры на углах, патрули по периметру.")
-            
+                                   + ACT2_SCENE)
+
             st["log"].append({"player": "GM", "text": "[переход]", "mech": {}, "narration": transition_narr})
             turn_no = len(st["log"]) - 1
             turn_id = db.log_turn(sid, turn_no, "GM", "[переход]", {}, {}, transition_narr)
-            
+
             return {
                 "mechanics": {"action_type": "free", "no_roll": True},
                 "narration": transition_narr,
@@ -756,7 +820,7 @@ def _act_core(sid: str, req: ActionIn):
                 "turn_no": turn_no,
                 "turn_id": turn_id,
                 "next_player": st["order"][0],
-                "state": st
+                "state": public_state(st),
             }
 
     narration = clean(reply.get("narration", ""))
@@ -1070,3 +1134,19 @@ async def ws_endpoint(websocket: WebSocket, sid: str,
             await websocket.receive_text()  # ping от клиента
     except WebSocketDisconnect:
         manager.disconnect(sid, websocket) 
+
+@app.get("/data/substances")
+def data_substances():
+    from backend import substances
+    return {"drugs": list(substances.DRUGS.keys()),
+            "poisons": list(substances.POISONS.keys())}
+
+
+@app.get("/data/recipes")
+def data_recipes():
+    from backend import crafting
+    out = {}
+    for k, v in crafting.RECIPES.items():
+        out[k] = {"name": v["name"], "components": v["components"],
+                  "skill": v["skill"], "dv": v["dv"]}
+    return {"recipes": out}        
