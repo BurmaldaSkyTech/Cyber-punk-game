@@ -447,60 +447,106 @@ def resolve_check(state, actor, judge):
 # РЕАКЦИИ NPC
 # ============================================================
 
-def resolve_npc_reaction(state, actor, mech):
-    """NPC отвечает на действие игрока (контратака, если был атакован)."""
-    if mech.get("action_type") not in ("attack_ranged", "attack_melee"):
+def resolve_npc_reaction(st, actor, mech):
+    """Все враждебные NPC реагируют на успешную атаку.
+    
+    Если атака успешна (даже если броня поглотила урон):
+    - Цель атаки контратакует
+    - Другие враждебные NPC в сцене могут присоединиться
+    """
+    if not mech.get("success") or mech.get("no_roll"):
         return None
     
     target_id = mech.get("target_id")
     if not target_id:
         return None
     
-    npc = next((n for n in state["npcs"] if n["id"] == target_id), None)
-    if not npc or npc.get("dead"):
+    # Находим цель атаки
+    target = next((n for n in st["npcs"] if n["id"] == target_id), None)
+    if not target or target.get("dead"):
         return None
     
-    # NPC контратакует
-    npc_ref = npc.get("stats", {}).get("REF", 5)
-    npc_skill = npc.get("skills", {}).get("handgun", 2)
+    # Реакция цели атаки (обязательна)
+    reaction = _generate_npc_attack(st, target, actor)
+    if not reaction:
+        return None
     
-    attack_mech = skill_check(npc_ref, npc_skill, 13)
+    # Ищем других NPC, которые могут присоединиться
+    other_npcs = [n for n in st["npcs"] 
+                  if n["id"] != target_id 
+                  and not n.get("dead")
+                  and _is_hostile(n)]
     
-    if attack_mech["success"]:
-        # NPC попал
-        weapon = npc.get("weapon", "heavy_pistol")
-        w = WEAPONS.get(weapon, {"damage": "3d6"})
-        dmg, faces = roll_dice(w.get("damage", "3d6"))
-        
-        # Защита игрока
-        player_armor = actor.get("armor", "leathers")
-        sp = ARMOR.get(player_armor, {}).get("sp", 0)
+    if other_npcs:
+        # Случайный другой NPC тоже атакует
+        import random
+        helper = random.choice(other_npcs)
+        helper_attack = _generate_npc_attack(st, helper, actor)
+        if helper_attack:
+            reaction["helper"] = helper_attack
+    
+    return reaction
+
+
+def _is_hostile(npc):
+    """Проверяет, враждебен ли NPC."""
+    name = npc.get("name", "").lower()
+    hostile_keywords = ["охранник", "телохранитель", "стражник", "guard", "наёмник", "merc"]
+    return any(k in name for k in hostile_keywords)
+
+
+def _generate_npc_attack(st, npc, target_player):
+    """Генерирует атаку NPC по игроку."""
+    import random
+    
+    # Определяем оружие NPC
+    weapon_key = "heavy_pistol"  # по умолчанию
+    if "охранник" in npc.get("name", "").lower() or "телохранитель" in npc.get("name", "").lower():
+        weapon_key = "heavy_pistol"
+    elif "фиксер" in npc.get("name", "").lower():
+        weapon_key = "medium_pistol"
+    
+    weapon = WEAPONS.get(weapon_key, {"damage": "2d6"})
+    
+    # Бросок атаки NPC
+    stat = npc.get("stats", {}).get("REF", 4)
+    skill = npc.get("skills", {}).get("handgun", 3)
+    attack_roll = roll_dice("1d10")[0] + stat + skill
+    target_dv = 13  # базовая сложность
+    
+    success = attack_roll >= target_dv
+    
+    result = {
+        "npc": npc["name"],
+        "success": success,
+        "total": attack_roll,
+        "dv": target_dv,
+    }
+    
+    if success:
+        # Бросок урона
+        dmg, faces = roll_dice(weapon.get("damage", "2d6"))
+        sp = ARMOR.get(target_player.get("armor", "leathers"), {}).get("sp", 0)
         net = max(0, dmg - sp)
         
-        if net > 0:
-            damage_result = apply_damage(actor, net, weapon_key=weapon)
-            actor["hp"] = damage_result["hp"]
-            actor["wound"] = damage_result["wound_state"]
-        
-        return {
-            "npc": npc["name"],
-            "success": True,
-            "total": attack_mech["total"],
-            "dv": attack_mech["dv"],
+        result.update({
             "damage": dmg,
             "armor_sp": sp,
             "net_damage": net,
-        }
-    else:
-        return {
-            "npc": npc["name"],
-            "success": False,
-            "total": attack_mech["total"],
-            "dv": attack_mech["dv"],
-            "damage": 0,
-            "net_damage": 0,
-        }
-
+            "weapon": weapon_key,
+        })
+        
+        # Применяем урон к игроку
+        if net > 0:
+            damage_result = apply_damage(target_player, net, weapon_key=weapon_key)
+            target_player["hp"] = damage_result["hp"]
+            target_player["wound"] = damage_result["wound_state"]
+            target_player["wound_penalty"] = damage_result["penalty"]
+            
+            if damage_result["critical_injury"]:
+                result["critical_injury"] = damage_result["critical_injury"]
+    
+    return result
 
 # ============================================================
 # УТИЛИТЫ
@@ -519,7 +565,62 @@ def get_faction(faction_name):
 def get_martial_arts_style(style_name):
     """Возвращает стиль боевого искусства."""
     return MARTIAL_ARTS_DATA.get("styles", {}).get(style_name)
+ 
+def _generate_npc_attack(st, npc, target_player):
+    """Генерирует атаку NPC по игроку."""
+    import random
     
+    # Определяем оружие по имени
+    weapon_key = "medium_pistol"
+    name_lower = npc.get("name", "").lower()
+    if "охранник" in name_lower or "телохранитель" in name_lower:
+        weapon_key = "heavy_pistol"
+    elif "фиксер" in name_lower:
+        weapon_key = "medium_pistol"
+    
+    weapon = WEAPONS.get(weapon_key, {"damage": "2d6", "skill": "handgun"})
+    
+    # Бросок атаки
+    stat = npc.get("stats", {}).get("REF", 4)
+    skill = npc.get("skills", {}).get("handgun", 3)
+    roll, faces = roll_dice("1d10")
+    attack_total = roll + stat + skill
+    dv = 13
+    
+    success = attack_total >= dv
+    
+    result = {
+        "npc": npc["name"],
+        "success": success,
+        "total": attack_total,
+        "dv": dv,
+        "weapon": weapon_key,
+    }
+    
+    if success:
+        # Бросок урона
+        dmg, dmg_faces = roll_dice(weapon.get("damage", "2d6"))
+        sp = ARMOR.get(target_player.get("armor", "leathers"), {}).get("sp", 0)
+        net = max(0, dmg - sp)
+        
+        result.update({
+            "damage": dmg,
+            "armor_sp": sp,
+            "net_damage": net,
+        })
+        
+        # Применяем урон к игроку
+        if net > 0:
+            damage_result = apply_damage(target_player, net, weapon_key=weapon_key)
+            target_player["hp"] = damage_result["hp"]
+            target_player["wound"] = damage_result["wound_state"]
+            target_player["wound_penalty"] = damage_result["penalty"]
+            
+            if damage_result.get("critical_injury"):
+                result["critical_injury"] = damage_result["critical_injury"]
+    
+    return result    
+ 
  # Алиас для обратной совместимости со старыми тестами
 wound_state = get_wound_state   
-    
+        
