@@ -1,0 +1,1125 @@
+{
+
+"book": "Cyberpunk RED Core Rulebook",
+
+"extractor": "grok",
+
+"entries": [
+
+{
+
+"pack": "creation",
+
+"key": "stat_min",
+
+"value": 2,
+
+"page": 79,
+
+"quote": "no STAT may be higher than 8 or lower than 2",
+
+"confidence": "high"
+
+},
+
+{
+
+"pack": "creation",
+
+"key": "stat_max",
+
+"value": 8,
+
+"page": 79,
+
+"quote": "no STAT may be higher than 8 or lower than 2",
+
+"confidence": "high"
+
+},
+
+{
+
+"pack": "creation",
+
+"key": "stat_pool_edgerunner",
+
+"value": "template roll (no fixed pool; Complete Package uses 62)",
+
+"page": 78,
+
+"quote": "When using the Edgerunner option, you will once again move to the Templates for your Character's Role",
+
+"confidence": "high"
+
+},
+
+{
+
+"pack": "creation",
+
+"key": "skill_pool_edgerunner",
+
+"value": 86,
+
+"page": 89,
+
+"quote": "Edgerunners get 86 Skill points to be distributed between your Character's Skills",
+
+"confidence": "high"
+
+},
+
+{
+
+"pack": "creation",
+
+"key": "skill_max_at_creation",
+
+"value": 6,
+
+"page": 89,
+
+"quote": "No Skill can be higher than 6 or lower than 2",
+
+"confidence": "high"
+
+},
+
+{
+
+"pack": "creation",
+
+"key": "hp_formula",
+
+"value": "10 + (5 × average of BODY and WILL, rounding up)",
+
+"page": 80,
+
+"quote": "You have Hit Points equal to 10 + (5[BODY and WILL averaged, rounding up])",
+
+"confidence": "high"
+
+},
+
+{
+
+"pack": "creation",
+
+"key": "humanity_formula",
+
+"value": "EMP × 10",
+
+"page": 81,
+
+"quote": "For every point of Empathy the Character has, they gain 10 points of Humanity (HUM)",
+
+"confidence": "high"
+
+},
+
+{
+
+"pack": "combat",
+
+"key": "dv_table",
+
+"value": {
+
+"Simple": 9,
+
+"Everyday": 13,
+
+"Difficult": 15,
+
+"Professional": 17,
+
+"Heroic": 21,
+
+"Incredible": 24,
+
+"Legendary": 29
+
+},
+
+"page": 130,
+
+"quote": "Simple 9 ... Everyday 13 ... Difficult 15 ... Professional 17 ... Heroic 21 ... Incredible 24 ... Legendary 29",
+
+"confidence": "high"
+
+},
+
+{
+
+"pack": "armor",
+
+"key": "table",
+
+"value": {
+
+"Leathers": {"sp": 4, "penalty": "None", "cost": "20eb"},
+
+"Kevlar": {"sp": 7, "penalty": "None", "cost": "50eb"},
+
+"Light Armorjack": {"sp": 11, "penalty": "None", "cost": "100eb"},
+
+"Bodyweight Suit": {"sp": 11, "penalty": "None", "cost": "1000eb"},
+
+"Medium Armorjack": {"sp": 12, "penalty": "-2 REF, DEX, and MOVE", "cost": "100eb"},
+
+"Heavy Armorjack": {"sp": 13, "penalty": "-2 REF, DEX, and MOVE", "cost": "500eb"},
+
+"Flak": {"sp": 15, "penalty": "-4 REF, DEX, and MOVE", "cost": "500eb"},
+
+"Metalgear": {"sp": 18, "penalty": "-4 REF, DEX and MOVE", "cost": "5000eb"},
+
+"Bulletproof Shield": {"hp": 10, "cost": "100eb"}
+
+},
+
+"page": 185,
+
+"quote": "Leathers ... 4 None ... Kevlar® 7 None ... Light Armorjack 11 None ... Bodyweight Suit 11 None ... Medium Armorjack 12 -2 ... Heavy Armorjack 13 -2 ... Flak 15 -4 ... Metalgear® 18 -4",
+
+"confidence": "high"
+
+},
+
+{
+
+"pack": "weapons",
+
+"key": "table",
+
+"value": {
+
+"Medium Pistol": {"damage": "2d6", "rof": 2, "mag": 12, "skill": "Handgun", "conceal": "YES", "price": "50eb"},
+
+"Heavy Pistol": {"damage": "3d6", "rof": 2, "mag": 8, "skill": "Handgun", "conceal": "YES", "price": "100eb"},
+
+"Very Heavy Pistol": {"damage": "4d6", "rof": 1, "mag": 8, "skill": "Handgun", "conceal": "NO", "price": "100eb"},
+
+"SMG": {"damage": "2d6", "rof": 1, "mag": 30, "skill": "Handgun", "conceal": "YES", "price": "100eb"},
+
+"Heavy SMG": {"damage": "3d6", "rof": 1, "mag": 40, "skill": "Handgun", "conceal": "NO", "price": "100eb"},
+
+"Shotgun": {"damage": "5d6", "rof": 1, "mag": 4, "skill": "Shoulder Arms", "conceal": "NO", "price": "500eb"},
+
+"Assault Rifle": {"damage": "5d6", "rof": 1, "mag": 25, "skill": "Shoulder Arms", "conceal": "NO", "price": "500eb"},
+
+"Sniper Rifle": {"damage": "5d6", "rof": 1, "mag": 4, "skill": "Shoulder Arms", "conceal": "NO", "price": "500eb"},
+
+"Rocket Launcher": {"damage": "8d6", "rof": 1, "mag": 1, "skill": "Heavy Weapons", "conceal": "NO", "price": "500eb"},
+
+"Grenade Launcher": {"damage": "6d6", "rof": 1, "mag": 2, "skill": "Heavy Weapons", "conceal": "NO", "price": "500eb"},
+
+"Light Melee Weapon": {"damage": "1d6", "rof": 2, "examples": "Combat Knife, Tomahawk"},
+
+"Medium Melee Weapon": {"damage": "2d6", "rof": 2, "examples": "Baseball Bat, Crowbar, Machete"},
+
+"Heavy Melee Weapon": {"damage": "3d6", "rof": 2, "examples": "Lead Pipe, Sword, Spiked Bat"},
+
+"Very Heavy Melee Weapon": {"damage": "4d6", "rof": 1, "examples": "Chainsaw, Sledgehammer"}
+
+},
+
+"page": 172,
+
+"quote": "Medium Pistol ... 2d6 ... Heavy Pistol ... 3d6 ... Very Heavy Pistol ... 4d6 ... SMG ... 2d6 ... Heavy SMG ... 3d6 ... Shotgun ... 5d6 ... Assault Rifle ... 5d6 ... Sniper Rifle ... 5d6 ... Rocket Launcher ... 8d6",
+
+"confidence": "high"
+
+}
+
+],
+
+"not_found": [
+
+{
+
+"pack": "creation",
+
+"key": "gear_budget",
+
+"reason": "No single fixed gear_budget value found; starting funds and gear packages vary by Role and method (Streetrat/Edgerunner/Complete Package)"
+
+},
+
+{
+
+"pack": "creation",
+
+"key": "starting_eb",
+
+"reason": "Starting eurobucks determined by Role package or Lifepath, no universal fixed amount extracted"
+
+},
+
+{
+
+"pack": "creation",
+
+"key": "methods",
+
+"reason": "Three methods exist (Streetrat, Edgerunner, Complete Package) but full structured comparison requires multi-page extraction beyond single quote"
+
+},
+
+{
+
+"pack": "creation",
+
+"key": "role_abilities",
+
+"reason": "Role abilities are multi-page Role-specific tables; not a single extractable value"
+
+},
+
+{
+
+"pack": "creation",
+
+"key": "roles",
+
+"reason": "Roles listed across templates; full canonical list requires cross-page synthesis not allowed"
+
+},
+
+{
+
+"pack": "creation",
+
+"key": "skill_list",
+
+"reason": "Full skill list spans multiple pages with Base descriptions; too large for single quote"
+
+},
+
+{
+
+"pack": "creation",
+
+"key": "stat_list",
+
+"reason": "STAT block (INT REF DEX TECH COOL WILL LUCK MOVE BODY EMP) appears but exact ordered list needs multi-page confirmation"
+
+},
+
+{
+
+"pack": "combat",
+
+"key": "aimed_shot_multipliers",
+
+"reason": "Not located in extracted combat pages"
+
+},
+
+{
+
+"pack": "combat",
+
+"key": "aimed_shot_penalties",
+
+"reason": "Not located in extracted combat pages"
+
+},
+
+{
+
+"pack": "combat",
+
+"key": "armor_ablation",
+
+"reason": "Referenced but full rule text not extracted with exact quote containing numeric value"
+
+},
+
+{
+
+"pack": "combat",
+
+"key": "autofire_rules",
+
+"reason": "Autofire noted on weapon entries but detailed resolution rules not extracted"
+
+},
+
+{
+
+"pack": "combat",
+
+"key": "critical_injury_bonus",
+
+"reason": "Not located"
+
+},
+
+{
+
+"pack": "combat",
+
+"key": "critical_injury_table",
+
+"reason": "Table exists in Trauma Team section but full contents not extracted"
+
+},
+
+{
+
+"pack": "combat",
+
+"key": "critical_injury_trigger",
+
+"reason": "Not located with exact value"
+
+},
+
+{
+
+"pack": "combat",
+
+"key": "death_save_formula",
+
+"reason": "Death Save equals BODY; partial but formula details incomplete in extract"
+
+},
+
+{
+
+"pack": "combat",
+
+"key": "initiative_formula",
+
+"reason": "Not located in extracted pages"
+
+},
+
+{
+
+"pack": "combat",
+
+"key": "melee_opposed_by",
+
+"reason": "Melee opposed by Evasion noted but full rule not quoted"
+
+},
+
+{
+
+"pack": "combat",
+
+"key": "range_dv",
+
+"reason": "Range DV tables not extracted"
+
+},
+
+{
+
+"pack": "combat",
+
+"key": "ranged_defense",
+
+"reason": "Not located"
+
+},
+
+{
+
+"pack": "combat",
+
+"key": "rof_rules",
+
+"reason": "ROF values on weapons but general rules not extracted"
+
+},
+
+{
+
+"pack": "combat",
+
+"key": "wound_penalties",
+
+"reason": "Referenced in HP section but numeric table not extracted"
+
+},
+
+{
+
+"pack": "combat",
+
+"key": "wound_states",
+
+"reason": "Wound states described but full structured data not extracted"
+
+},
+
+{
+
+"pack": "cyberware",
+
+"key": "humanity_loss_rules",
+
+"reason": "Humanity Loss referenced but detailed rules and tables not extracted"
+
+},
+
+{
+
+"pack": "cyberware",
+
+"key": "table",
+
+"reason": "Cyberware tables span many pages; not extracted"
+
+},
+
+{
+
+"pack": "netrunning",
+
+"key": "architectures",
+
+"reason": "NET Architecture rules exist but not extracted"
+
+},
+
+{
+
+"pack": "netrunning",
+
+"key": "black_ice",
+
+"reason": "Black ICE listed but full data not extracted"
+
+},
+
+{
+
+"pack": "netrunning",
+
+"key": "interface_dv",
+
+"reason": "Not extracted"
+
+},
+
+{
+
+"pack": "netrunning",
+
+"key": "program_list",
+
+"reason": "Programs table not extracted"
+
+},
+
+{
+
+"pack": "gear",
+
+"key": "services",
+
+"reason": "Not extracted"
+
+},
+
+{
+
+"pack": "gear",
+
+"key": "table",
+
+"reason": "Gear tables extensive; not extracted"
+
+}
+
+],
+
+"code_discrepancies": [
+
+{
+
+"symbol": "engine.DV.heroic",
+
+"code": 19,
+
+"book": 21,
+
+"page": 130,
+
+"verdict": "mismatch",
+
+"quote": "Heroic ... 21"
+
+},
+
+{
+
+"symbol": "engine.DV.incredible",
+
+"code": 21,
+
+"book": 24,
+
+"page": 130,
+
+"verdict": "mismatch",
+
+"quote": "Incredible ... 24"
+
+},
+
+{
+
+"symbol": "engine.DV.legendary",
+
+"code": 25,
+
+"book": 29,
+
+"page": 130,
+
+"verdict": "mismatch",
+
+"quote": "Legendary ... 29"
+
+},
+
+{
+
+"symbol": "engine.DV.simple",
+
+"code": 9,
+
+"book": 9,
+
+"page": 130,
+
+"verdict": "ok",
+
+"quote": "Simple 9"
+
+},
+
+{
+
+"symbol": "engine.DV.everyday",
+
+"code": 13,
+
+"book": 13,
+
+"page": 130,
+
+"verdict": "ok",
+
+"quote": "Everyday 13"
+
+},
+
+{
+
+"symbol": "engine.DV.difficult",
+
+"code": 15,
+
+"book": 15,
+
+"page": 130,
+
+"verdict": "ok",
+
+"quote": "Difficult 15"
+
+},
+
+{
+
+"symbol": "engine.DV.professional",
+
+"code": 17,
+
+"book": 17,
+
+"page": 130,
+
+"verdict": "ok",
+
+"quote": "Professional 17"
+
+},
+
+{
+
+"symbol": "engine.ARMOR.leathers.sp",
+
+"code": 4,
+
+"book": 4,
+
+"page": 185,
+
+"verdict": "ok",
+
+"quote": "Leathers ... 4"
+
+},
+
+{
+
+"symbol": "engine.ARMOR.kevlar.sp",
+
+"code": 7,
+
+"book": 7,
+
+"page": 185,
+
+"verdict": "ok",
+
+"quote": "Kevlar® 7"
+
+},
+
+{
+
+"symbol": "engine.ARMOR.light_armorjack.sp",
+
+"code": 11,
+
+"book": 11,
+
+"page": 185,
+
+"verdict": "ok",
+
+"quote": "Light Armorjack 11"
+
+},
+
+{
+
+"symbol": "engine.ARMOR.medium_armorjack.sp",
+
+"code": 12,
+
+"book": 12,
+
+"page": 185,
+
+"verdict": "ok",
+
+"quote": "Medium Armorjack 12"
+
+},
+
+{
+
+"symbol": "engine.ARMOR.heavy_armorjack.sp",
+
+"code": 14,
+
+"book": 13,
+
+"page": 185,
+
+"verdict": "mismatch",
+
+"quote": "Heavy Armorjack 13"
+
+},
+
+{
+
+"symbol": "engine.ARMOR.flak.sp",
+
+"code": 15,
+
+"book": 15,
+
+"page": 185,
+
+"verdict": "ok",
+
+"quote": "Flak 15"
+
+},
+
+{
+
+"symbol": "engine.ARMOR.metalgear.sp",
+
+"code": 12,
+
+"book": 18,
+
+"page": 185,
+
+"verdict": "mismatch",
+
+"quote": "Metalgear® 18"
+
+},
+
+{
+
+"symbol": "engine.ARMOR.bodyweight_suit.sp",
+
+"code": 11,
+
+"book": 11,
+
+"page": 185,
+
+"verdict": "ok",
+
+"quote": "Bodyweight Suit 11"
+
+},
+
+{
+
+"symbol": "engine.ARMOR.bodyplate.sp",
+
+"code": 18,
+
+"book": 18,
+
+"page": 185,
+
+"verdict": "ok",
+
+"quote": "Metalgear® 18",
+
+"note": "bodyplate appears to map to Metalgear"
+
+},
+
+{
+
+"symbol": "engine.ARMOR.bulletproof_shield.sp",
+
+"code": 10,
+
+"book": 10,
+
+"page": 185,
+
+"verdict": "ok",
+
+"quote": "Bulletproof Shield ... 10",
+
+"note": "Book lists as Hit Points (HP), code uses sp"
+
+},
+
+{
+
+"symbol": "engine.WEAPONS.medium_pistol.damage",
+
+"code": "2d6",
+
+"book": "2d6",
+
+"page": 172,
+
+"verdict": "ok",
+
+"quote": "Medium Pistol ... 2d6"
+
+},
+
+{
+
+"symbol": "engine.WEAPONS.heavy_pistol.damage",
+
+"code": "3d6",
+
+"book": "3d6",
+
+"page": 172,
+
+"verdict": "ok",
+
+"quote": "Heavy Pistol ... 3d6"
+
+},
+
+{
+
+"symbol": "engine.WEAPONS.very_heavy_pistol.damage",
+
+"code": "4d6",
+
+"book": "4d6",
+
+"page": 172,
+
+"verdict": "ok",
+
+"quote": "Very Heavy Pistol ... 4d6"
+
+},
+
+{
+
+"symbol": "engine.WEAPONS.smg.damage",
+
+"code": "3d6",
+
+"book": "2d6",
+
+"page": 172,
+
+"verdict": "mismatch",
+
+"quote": "SMG ... 2d6"
+
+},
+
+{
+
+"symbol": "engine.WEAPONS.heavy_smg.damage",
+
+"code": "3d6",
+
+"book": "3d6",
+
+"page": 172,
+
+"verdict": "ok",
+
+"quote": "Heavy SMG ... 3d6"
+
+},
+
+{
+
+"symbol": "engine.WEAPONS.shotgun.damage",
+
+"code": "5d6",
+
+"book": "5d6",
+
+"page": 172,
+
+"verdict": "ok",
+
+"quote": "Shotgun ... 5d6"
+
+},
+
+{
+
+"symbol": "engine.WEAPONS.assault_rifle.damage",
+
+"code": "5d6",
+
+"book": "5d6",
+
+"page": 172,
+
+"verdict": "ok",
+
+"quote": "Assault Rifle ... 5d6"
+
+},
+
+{
+
+"symbol": "engine.WEAPONS.sniper_rifle.damage",
+
+"code": "5d6",
+
+"book": "5d6",
+
+"page": 172,
+
+"verdict": "ok",
+
+"quote": "Sniper Rifle ... 5d6"
+
+},
+
+{
+
+"symbol": "engine.WEAPONS.rocket_launcher.damage",
+
+"code": "8d6",
+
+"book": "8d6",
+
+"page": 172,
+
+"verdict": "ok",
+
+"quote": "Rocket Launcher ... 8d6"
+
+},
+
+{
+
+"symbol": "engine.WEAPONS.grenade.damage",
+
+"code": "6d6",
+
+"book": "6d6",
+
+"page": 172,
+
+"verdict": "ok",
+
+"quote": "Grenade Launcher ... 6d6"
+
+},
+
+{
+
+"symbol": "engine.WEAPONS.knife.damage",
+
+"code": "1d6",
+
+"book": "1d6",
+
+"page": 176,
+
+"verdict": "ok",
+
+"quote": "Light Melee Weapon ... 1d6"
+
+},
+
+{
+
+"symbol": "engine.WEAPONS.bat.damage",
+
+"code": "2d6",
+
+"book": "2d6",
+
+"page": 176,
+
+"verdict": "ok",
+
+"quote": "Medium Melee Weapon ... Baseball Bat ... 2d6"
+
+},
+
+{
+
+"symbol": "engine.WEAPONS.machete.damage",
+
+"code": "2d6",
+
+"book": "2d6",
+
+"page": 176,
+
+"verdict": "ok",
+
+"quote": "Medium Melee Weapon ... Machete ... 2d6"
+
+},
+
+{
+
+"symbol": "engine.WEAPONS.axe.damage",
+
+"code": "3d6",
+
+"book": "3d6",
+
+"page": 176,
+
+"verdict": "ok",
+
+"quote": "Heavy Melee Weapon ... 3d6"
+
+},
+
+{
+
+"symbol": "engine.WEAPONS.chainsaw.damage",
+
+"code": "4d6",
+
+"book": "4d6",
+
+"page": 176,
+
+"verdict": "ok",
+
+"quote": "Very Heavy Melee Weapon ... Chainsaw ... 4d6"
+
+},
+
+{
+
+"symbol": "creation.limits.stat_pool",
+
+"code": 60,
+
+"book": 62,
+
+"page": 79,
+
+"verdict": "mismatch",
+
+"quote": "Starting Character 62"
+
+},
+
+{
+
+"symbol": "creation.limits.skill_pool",
+
+"code": 30,
+
+"book": 86,
+
+"page": 89,
+
+"verdict": "mismatch",
+
+"quote": "Edgerunners get 86 Skill points"
+
+},
+
+{
+
+"symbol": "creation.HOUSE.stat_pool_edgerunner",
+
+"code": 60,
+
+"book": "template (no pool)",
+
+"page": 78,
+
+"verdict": "mismatch",
+
+"quote": "When using the Edgerunner option, you will once again move to the Templates"
+
+},
+
+{
+
+"symbol": "creation.HOUSE.skill_pool_edgerunner",
+
+"code": 30,
+
+"book": 86,
+
+"page": 89,
+
+"verdict": "mismatch",
+
+"quote": "Edgerunners get 86 Skill points to be distributed"
+
+}
+
+]
+
+}

@@ -97,9 +97,9 @@ def preset(role):
 
 
 def _finalize(name, role, stats, skills, weapon, armor, gear, cyber, programs):
-    body, will, emp = stats.get("BODY", 4), stats.get("WILL", 4), stats.get("EMP", 4)
-    hp_formula = rules.get("creation", "hp_formula", house="BODY+WILL+2 (house)")
-    hp = body + will + 2  # масштаб до подтверждения формулы по книге
+    from backend import rules_tables
+    emp = stats.get("EMP", 4)
+    hp = int(rules_tables.max_hp(stats))
     return {
         "name": name, "role": role, "stats": dict(stats), "skills": dict(skills),
         "hp": hp, "max_hp": hp, "wound": "unharmed", "dsp": 0, "dead": False,
@@ -107,8 +107,10 @@ def _finalize(name, role, stats, skills, weapon, armor, gear, cyber, programs):
         "humanity": emp * 10, "cyberware": list(cyber),
         "inventory": list(dict.fromkeys([weapon, armor] + gear)),
         "programs": list(programs), "active_effects": [],
-        "rules_provenance": {"hp_formula": hp_formula,
-                             "sources": _sources(["stat_pool_edgerunner", "skill_pool_edgerunner"])},
+        "rules_provenance": {
+            "hp_formula": rules.provenance("creation", "hp_formula"),
+            "sources": _sources(["stat_pool_edgerunner", "skill_pool_edgerunner"]),
+        },
     }
 
 

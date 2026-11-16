@@ -1,17 +1,17 @@
-"""Принимает JSON от внешнего экстрактора (Grok), валидирует provenance,
-пишет в data/rules. По умолчанию — как НЕподтверждённое (ожидает глаз человека).
-Флаг --accept подтверждает только записи, прошедшие все проверки.
-"""
+"""Приёмка JSON внешнего экстрактора: нормализация, валидация provenance,
+детект внутренних конфликтов. По умолчанию пишет как НЕподтверждённое."""
 import json
 import pathlib
 import re
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
-from backend import engine, rules
+from backend import rules
+from tools.rules_normalize import normalize_entry
 
-ROOT = pathlib.Path(__file__).resolve().parents[1]
 MAX_QUOTE = 240
+NUMERIC_KEYS = {"stat_min", "stat_max", "stat_pool_edgerunner",
+                "skill_pool_edgerunner", "skill_max_at_creation", "starting_eb"}
 
 
 def _norm(s):
@@ -34,9 +34,21 @@ def value_in_quote(value, quote):
     return False
 
 
-def validate(e):
+def conflicts_for(payload, pack, key):
+    """Ищем в code_discrepancies утверждения о том же параметре с другим значением."""
+    out = []
+    tail = key.replace("_edgerunner", "")
+    for d in payload.get("code_discrepancies", []):
+        sym = (d.get("symbol") or "").lower()
+        if tail and tail in sym and d.get("book") is not None:
+            out.append(d)
+    return out
+
+
+def validate(e, payload):
     problems = []
-    if not e.get("pack") or not e.get("key"):
+    pack, key = e.get("pack"), e.get("key")
+    if not pack or not key:
         problems.append("нет pack/key")
     page = e.get("page")
     if not isinstance(page, int) or page <= 0:
@@ -46,68 +58,45 @@ def validate(e):
         problems.append("нет quote")
     if len(quote) > MAX_QUOTE:
         problems.append(f"quote длиннее {MAX_QUOTE}")
-    if e.get("value") is None:
+    val = e.get("value")
+    if val is None:
         problems.append("value = null")
-    elif quote and not value_in_quote(e["value"], quote):
+    if key in NUMERIC_KEYS and not isinstance(val, (int, float)):
+        problems.append(f"ожидалось число, получено {type(val).__name__}")
+    if isinstance(val, (int, float, str)) and quote and not value_in_quote(val, quote):
         problems.append("значение не встречается в цитате")
     if e.get("confidence") == "low":
         problems.append("confidence=low")
+    for d in conflicts_for(payload, pack, key):
+        if d.get("book") != val:
+            problems.append(f"КОНФЛИКТ с {d.get('symbol')}: book={d.get('book')}")
     return problems
-
-
-def diff_tables():
-    print("\n=== РАСХОЖДЕНИЯ КОД vs КНИГА ===")
-    rows = 0
-    for pack, key, table, fields in [
-        ("combat", "dv_table", engine.DV, None),
-        ("armor", "table", engine.ARMOR, ["sp", "penalty", "price"]),
-        ("weapons", "table", engine.WEAPONS, ["damage", "rof", "mag", "price", "skill"]),
-    ]:
-        book = rules.get(pack, key, house=None) if rules.entry(pack, key) else None
-        if not isinstance(book, dict):
-            print(f"[нет данных] {pack}.{key}")
-            continue
-        for k, v in table.items():
-            if k not in book:
-                print(f"[нет в книге] {pack}.{key}.{k}")
-                rows += 1
-                continue
-            if fields and isinstance(v, dict):
-                for f in fields:
-                    if f in v and f in book[k] and v[f] != book[k][f]:
-                        print(f"[MISMATCH] {pack}.{key}.{k}.{f}: код={v[f]} книга={book[k][f]}")
-                        rows += 1
-    print(f"итого расхождений: {rows}")
 
 
 if __name__ == "__main__":
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     accept = "--accept" in sys.argv
     if not args:
-        print("usage: python tools/rules_import.py <file.json> [--accept]")
+        print("usage: python -m tools.rules_import <file.json> [--accept]")
         sys.exit(2)
     payload = json.loads(pathlib.Path(args[0]).read_text(encoding="utf-8"))
-    ok, flagged = 0, 0
+    ok = flagged = 0
     for e in payload.get("entries", []):
-        problems = validate(e)
-        tag = "OK" if not problems else "FLAG"
+        raw = e.get("value")
+        norm = normalize_entry(e.get("pack"), e.get("key"), raw)
+        problems = validate(dict(e, value=norm), payload)
         if problems:
             flagged += 1
         else:
             ok += 1
         verified = accept and not problems
-        rules.put(e["pack"], e["key"], e.get("value"),
-                  page=e.get("page"), chunk=e.get("chunk"),
+        rules.put(e["pack"], e["key"], norm, page=e.get("page"), chunk=e.get("chunk"),
                   note=f"grok:{e.get('confidence','?')}"
                        + (f" | {'; '.join(problems)}" if problems else ""),
                   verified=verified)
-        print(f"[{tag}] {e['pack']}.{e['key']} page={e.get('page')} "
-              f"verified={verified}" + (f" :: {'; '.join(problems)}" if problems else ""))
+        mark = "OK  " if not problems else "FLAG"
+        print(f"[{mark}] {e['pack']}.{e['key']} p.{e.get('page')} verified={verified}"
+              + (f"\n        {'; '.join(problems)}" if problems else ""))
     for nf in payload.get("not_found", []):
-        print(f"[NOT_FOUND] {nf.get('pack')}.{nf.get('key')}: {nf.get('reason')}")
-    for d in payload.get("code_discrepancies", []):
-        if d.get("verdict") == "mismatch":
-            print(f"[CODE MISMATCH] {d.get('symbol')}: код={d.get('code')} "
-                  f"книга={d.get('book')} стр.{d.get('page')}")
-    print(f"\nпринято чисто: {ok}, с замечаниями: {flagged}, режим accept={accept}")
-    diff_tables()
+        print(f"[SKIP] {nf.get('pack')}.{nf.get('key')}: {nf.get('reason')}")
+    print(f"\nчистых: {ok}, с замечаниями: {flagged}, accept={accept}")

@@ -652,3 +652,21 @@ def get_martial_arts_style(style_name):
 
 # Алиас для обратной совместимости со старыми тестами
 wound_state = get_wound_state
+
+
+_BASE_DV, _BASE_ARMOR, _BASE_WEAPONS = dict(DV), dict(ARMOR), dict(WEAPONS)
+
+
+def refresh_rules_tables():
+    """Перечитывает книжные таблицы. Вызывается на старте и после /rules/commit."""
+    from backend import rules_tables
+    new_dv = rules_tables.dv_table(_BASE_DV)
+    new_armor = rules_tables.armor_table(_BASE_ARMOR)
+    new_weap = rules_tables.weapon_table(_BASE_WEAPONS)
+    DV.clear(); DV.update(new_dv)
+    ARMOR.clear(); ARMOR.update(new_armor)
+    WEAPONS.clear(); WEAPONS.update(new_weap)
+    return {"dv": len(DV), "armor": len(ARMOR), "weapons": len(WEAPONS)}
+
+
+refresh_rules_tables()

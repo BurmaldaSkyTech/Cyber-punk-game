@@ -53,6 +53,7 @@ LOOP = None
 async def lifespan(app):
     global LOOP
     LOOP = asyncio.get_running_loop()
+    engine.refresh_rules_tables()
     print("[WS] event loop сохранён")
     yield
 
@@ -1483,4 +1484,23 @@ def rules_commit(req: dict):
     rec = rules.put(req["pack"], req["key"], req.get("value"),
                     page=req.get("page"), chunk=req.get("chunk"),
                     note=req.get("note", ""), verified=True)
+    engine.refresh_rules_tables()                
     return {"ok": True, "entry": rec, "status": rules.status()} 
+
+@app.post("/rules/migrate_hp")
+def rules_migrate_hp(req: dict):
+    """Пересчитывает max_hp у существующих персонажей по книжной формуле."""
+    _require_rules_admin(req.get("token", ""))
+    from backend import rules_tables
+    changed = []
+    for sid, st in list(SESSIONS.items()):
+        for p in st.get("players", []):
+            old = int(p.get("max_hp") or 0)
+            new = int(rules_tables.max_hp(p.get("stats") or {}))
+            if new != old and new > 0:
+                ratio = (p.get("hp", old) / old) if old else 1.0
+                p["max_hp"] = new
+                p["hp"] = max(0, min(new, int(round(new * ratio))))
+                changed.append({"sid": sid, "name": p["name"], "old": old, "new": new})
+        persist(st)
+    return {"count": len(changed), "changed": changed}    
