@@ -258,6 +258,7 @@ def resolve_check(state, actor, judge):
     
     # === БРОСОК ===
     mech = skill_check(stat, sk_lvl, dv, mods)
+    mech["location"] = (judge or {}).get("location") or "auto"    
     mech.update({
         "actor": actor["name"],
         "action_type": judge.get("action_type", "skill"),

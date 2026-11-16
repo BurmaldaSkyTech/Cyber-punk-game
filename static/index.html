@@ -560,19 +560,26 @@ function addLog(text, cls, echo) {
   log.scrollTop = log.scrollHeight;
 }
 
+const LOCATION_RU = {head: 'голова', torso: 'корпус', limb: 'конечность', auto: 'корпус'};
+
 function renderLogEntry(e) {
   addLog(`${e.player}: ${e.text}`, 'mech');
   const m = e.mech || {};
   if (m.no_roll) addLog('[без броска] свободное действие', 'mech');
-  else if (m.action_type) addLog(`[механика] ${m.action_type} | ${m.stat_key}+${m.skill}: ${m.total} vs DV${m.dv} -> ${m.success ? 'УСПЕХ' : 'ПРОВАЛ'}`, 'mech');
-  if (m.assist) addLog(`[помощь] ${m.assist.helper || ''} +${m.assist.bonus || 0}`, 'mech');
+  else if (m.action_type) {
+    const loc = (m.location && m.location !== 'auto') ? ` [${LOCATION_RU[m.location] || m.location}]` : '';
+    addLog(`[механика] ${m.action_type}${loc} | ${m.stat_key}+${m.skill}: ${m.total} vs DV${m.dv} -> ${m.success ? 'УСПЕХ' : 'ПРОВАЛ'}`, 'mech');
+  }
+  if (m.assist) addLog(`[помощь] +${m.assist.bonus || 0}`, 'mech');
   if (m.damage != null) addLog(`цель ${m.target}: урон ${m.damage} - SP${m.armor_sp} = ${m.net_damage}`, 'mech');
-  if (m.critical_injury) addLog(`[критическая травма] ${m.critical_injury}`, 'mech');
+  if (m.critical_injury) addLog(`[критическая травма у ${m.target || 'цели'}] ${m.critical_injury}`, 'mech');
   if (m.npc_reaction) {
     const nr = m.npc_reaction;
-    addLog(`[ответ NPC] ${nr.npc}: ${nr.success ? 'попадание' : 'промах'}, урон по игроку ${nr.net_damage || 0}`, 'mech');
-    const h = nr.helper;
-    if (h) addLog(`[ответ NPC] ${h.npc}: ${h.success ? 'попадание' : 'промах'}, урон по игроку ${h.net_damage || 0}`, 'mech');
+    (nr.shots || [nr]).forEach(s => {
+      addLog(`[ответ NPC] ${s.npc} → ${nr.target_player || 'игрок'}: ${s.success ? 'попадание' : 'промах'}, урон ${s.net_damage || 0}`, 'mech');
+      if (s.critical_injury) addLog(`[критическая травма у игрока] ${s.critical_injury}`, 'mech');
+    });
+    if (nr.principal) addLog(`[NPC] ${nr.principal.npc}: ${nr.principal.text}`, 'mech');
   }
   if (e.narration) addLog(e.narration, 'narr');
 }

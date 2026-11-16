@@ -560,3 +560,22 @@ def test_find_by_code():
     assert m.find_by_code("test01")["id"] == "abc"
     assert m.find_by_code("NOPE") is None
     m.SESSIONS.clear()    
+ 
+def test_detect_departure_ignores_roleplay():
+    from backend import main as m
+
+    leave, yes, no = m.detect_departure_intent("А меня не пустили, я ухожу отсюда *в слезах уходит*")
+    # речь "я ухожу" -> leave True, но звёздочки не влияют
+    assert leave is True
+
+    leave, yes, no = m.detect_departure_intent("*в слезах уходит*")
+    assert leave is False  # только отыгрыш в звёздочках — не триггер
+
+    leave, yes, no = m.detect_departure_intent("не ухожу, остаюсь за столом")
+    assert leave is False  # отрицание
+
+    leave, yes, no = m.detect_departure_intent("да, подтверждаю")
+    assert yes is True
+
+    leave, yes, no = m.detect_departure_intent("нет, передумал")
+    assert no is True 
