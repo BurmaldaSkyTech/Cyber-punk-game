@@ -19,9 +19,14 @@ def armor_table(base):
     book = rules.get_optional("armor", "table")
     if isinstance(book, dict):
         for k, v in book.items():
-            if v.get("is_shield"):
-                continue
             cur = out.setdefault(k, {})
+            if v.get("is_shield"):
+                cur["is_shield"] = True
+                if v.get("hp") is not None:
+                    cur["hp"] = v["hp"]
+                if v.get("price") is not None:
+                    cur["price"] = v["price"]
+                continue
             if "sp" in v:
                 cur["sp"] = v["sp"]
             pen = v.get("penalty") or {}
@@ -29,6 +34,9 @@ def armor_table(base):
             cur["penalty_stats"] = pen.get("stats", [])
             if v.get("price") is not None:
                 cur["price"] = v["price"]
+        if "metalgear" in out and "bodyplate" in out:
+            out["bodyplate"].update(out["metalgear"])
+            out["bodyplate"]["book_alias"] = "metalgear"
     return out
 
 

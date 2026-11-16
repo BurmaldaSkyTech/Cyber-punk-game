@@ -759,6 +759,11 @@ def resolve_check(state, actor, judge):
                                   actor.get("max_hp", 10))
     wound_pen = rules.get_optional("combat", "wound_penalties")
     mods = wound_pen.get(wound_state, 0) if isinstance(wound_pen, dict) else get_wound_penalty(wound_state)
+    armor_rec = ARMOR.get(actor.get("armor") or "", {}) or {}
+    armor_pen = int(armor_rec.get("penalty", 0) or 0)
+    pen_stats = armor_rec.get("penalty_stats") or ["REF", "DEX", "MOVE"]
+    if armor_pen and stat_key in pen_stats:
+        mods += armor_pen
 
     location = (judge.get("location") or "auto")
     aimed_pen = 0
@@ -768,6 +773,7 @@ def resolve_check(state, actor, judge):
         mods += aimed_pen
 
     mech = skill_check(stat, sk_lvl, dv, mods)
+    mech["armor_penalty"] = armor_pen if stat_key in pen_stats else 0
     mech.update({
         "actor": actor["name"], "action_type": at, "skill": skill,
         "stat_key": stat_key, "dv_key": dv_key,
