@@ -1,0 +1,480 @@
+{
+  "task": "Сверить константы кода с Cyberpunk RED Core Rulebook и заполнить ключи правил",
+  "book": "Cyberpunk RED Core Rulebook",
+  "code_constants": {
+    "engine.DV": {
+      "simple": 9,
+      "everyday": 13,
+      "difficult": 15,
+      "professional": 17,
+      "heroic": 19,
+      "incredible": 21,
+      "legendary": 25
+    },
+    "engine.ARMOR": {
+      "leathers": {
+        "sp": 4
+      },
+      "kevlar": {
+        "sp": 7
+      },
+      "light_armorjack": {
+        "sp": 11
+      },
+      "metalgear": {
+        "sp": 12
+      },
+      "medium_armorjack": {
+        "sp": 12
+      },
+      "heavy_armorjack": {
+        "sp": 14
+      },
+      "flak": {
+        "sp": 15
+      },
+      "bodyplate": {
+        "sp": 18
+      },
+      "bodyweight_suit": {
+        "sp": 11
+      },
+      "bulletproof_shield": {
+        "sp": 10
+      }
+    },
+    "engine.WEAPONS": {
+      "medium_pistol": {
+        "damage": "2d6"
+      },
+      "heavy_pistol": {
+        "damage": "3d6"
+      },
+      "shotgun": {
+        "damage": "5d6"
+      },
+      "assault_rifle": {
+        "damage": "5d6"
+      },
+      "smg": {
+        "damage": "3d6"
+      },
+      "sniper_rifle": {
+        "damage": "5d6"
+      },
+      "knife": {
+        "damage": "1d6"
+      },
+      "bat": {
+        "damage": "2d6"
+      },
+      "machete": {
+        "damage": "2d6"
+      },
+      "axe": {
+        "damage": "3d6"
+      },
+      "chainsaw": {
+        "damage": "4d6"
+      },
+      "grenade": {
+        "damage": "6d6"
+      },
+      "very_heavy_pistol": {
+        "damage": "4d6",
+        "rof": 1,
+        "mag": 8,
+        "price": 100,
+        "skill": "handgun",
+        "conceal": "no"
+      },
+      "heavy_smg": {
+        "damage": "3d6",
+        "rof": 1,
+        "mag": 40,
+        "price": 100,
+        "skill": "handgun",
+        "conceal": "no"
+      },
+      "rocket_launcher": {
+        "damage": "8d6",
+        "rof": 1,
+        "mag": 1,
+        "price": 500,
+        "skill": "heavy_weapons",
+        "conceal": "no"
+      },
+      "flamethrower": {
+        "damage": "4d6",
+        "rof": 1,
+        "price": 500,
+        "skill": "heavy_weapons",
+        "conceal": "no"
+      }
+    },
+    "engine.SKILL_STAT": {
+      "athletics": "BODY",
+      "brawling": "REF",
+      "concentration": "WILL",
+      "contortionist": "REF",
+      "dance": "REF",
+      "drive_land_vehicle": "REF",
+      "evasion": "REF",
+      "handgun": "REF",
+      "heavy_weapons": "REF",
+      "martial_arts": "REF",
+      "melee_weapon": "REF",
+      "pilot_air_vehicle": "REF",
+      "pilot_sea_vehicle": "REF",
+      "riding": "REF",
+      "shoulder_arms": "REF",
+      "autofire": "REF",
+      "stealth": "REF",
+      "accounting": "INT",
+      "conceal_reveal_object": "INT",
+      "criminology": "INT",
+      "cryptography": "INT",
+      "deduction": "INT",
+      "education": "INT",
+      "gamble": "INT",
+      "language": "INT",
+      "library_search": "INT",
+      "lip_reading": "INT",
+      "local_expert": "INT",
+      "perception": "INT",
+      "science": "INT",
+      "tactics": "INT",
+      "tracking": "INT",
+      "wilderness_survival": "INT",
+      "interface": "INT",
+      "programming": "INT",
+      "air_vehicle_tech": "TECH",
+      "basic_tech": "TECH",
+      "cybertech": "TECH",
+      "demolitions": "TECH",
+      "electronics_security_tech": "TECH",
+      "first_aid": "TECH",
+      "forgery": "TECH",
+      "land_vehicle_tech": "TECH",
+      "paint_draw_photography": "TECH",
+      "paramedic": "TECH",
+      "pharmaceuticals": "TECH",
+      "pick_lock": "TECH",
+      "pick_pocket": "TECH",
+      "sea_vehicle_tech": "TECH",
+      "weaponstech": "TECH",
+      "acting": "COOL",
+      "bribery": "COOL",
+      "conversation": "COOL",
+      "human_perception": "COOL",
+      "interrogation": "COOL",
+      "persuasion": "COOL",
+      "personal_grooming": "COOL",
+      "streetwise": "COOL",
+      "trading": "COOL",
+      "wardrobe_style": "COOL",
+      "performance": "EMP",
+      "endurance": "WILL",
+      "resist_torture_drugs": "WILL",
+      "tracking_cybernetics": "INT",
+      "surgery": "TECH"
+    },
+    "creation.limits": {
+      "stat_min": 2,
+      "stat_max": 8,
+      "stat_pool": 60,
+      "skill_pool": 30,
+      "skill_max": 6,
+      "gear_limit": 4,
+      "prog_limit": 3
+    },
+    "creation.HOUSE": {
+      "roles": [
+        "Solo",
+        "Netrunner",
+        "Tech",
+        "Rockerboy",
+        "Fixer",
+        "Nomad",
+        "Medtech",
+        "Lawman",
+        "Exec",
+        "Media"
+      ],
+      "stat_list": [
+        "INT",
+        "REF",
+        "DEX",
+        "TECH",
+        "COOL",
+        "WILL",
+        "LUCK",
+        "MOVE",
+        "BODY",
+        "EMP"
+      ],
+      "stat_min": 2,
+      "stat_max": 8,
+      "stat_pool_edgerunner": 60,
+      "skill_pool_edgerunner": 30,
+      "skill_max_at_creation": 6,
+      "skill_list": [
+        {
+          "key": "handgun",
+          "stat": "REF"
+        },
+        {
+          "key": "melee_weapon",
+          "stat": "DEX"
+        },
+        {
+          "key": "martial_arts",
+          "stat": "DEX"
+        },
+        {
+          "key": "evasion",
+          "stat": "DEX"
+        },
+        {
+          "key": "athletics",
+          "stat": "DEX"
+        },
+        {
+          "key": "perception",
+          "stat": "INT"
+        },
+        {
+          "key": "stealth",
+          "stat": "DEX"
+        },
+        {
+          "key": "persuasion",
+          "stat": "COOL"
+        },
+        {
+          "key": "conversation",
+          "stat": "EMP"
+        },
+        {
+          "key": "intimidation",
+          "stat": "COOL"
+        },
+        {
+          "key": "trading",
+          "stat": "COOL"
+        },
+        {
+          "key": "interface",
+          "stat": "INT"
+        },
+        {
+          "key": "programming",
+          "stat": "INT"
+        },
+        {
+          "key": "electronics_security_tech",
+          "stat": "TECH"
+        },
+        {
+          "key": "basic_tech",
+          "stat": "TECH"
+        },
+        {
+          "key": "weaponstech",
+          "stat": "TECH"
+        },
+        {
+          "key": "drive_land_vehicle",
+          "stat": "REF"
+        },
+        {
+          "key": "first_aid",
+          "stat": "TECH"
+        },
+        {
+          "key": "streetwise",
+          "stat": "COOL"
+        },
+        {
+          "key": "deduction",
+          "stat": "INT"
+        }
+      ],
+      "gear": [
+        "agent",
+        "cyberdeck",
+        "toolkit",
+        "medkit",
+        "flashlight",
+        "lockpick",
+        "grapple",
+        "camera",
+        "armored_jacket",
+        "restraints"
+      ],
+      "weapons": [
+        "heavy_pistol",
+        "medium_pistol",
+        "knife",
+        "baton",
+        "assault_rifle",
+        "shotgun",
+        "sniper_rifle"
+      ],
+      "armors": [
+        "leathers",
+        "light_armorjack",
+        "medium_armorjack",
+        "heavy_armorjack",
+        "kevlar"
+      ],
+      "programs": [
+        "sword",
+        "armor",
+        "shield",
+        "banhammer",
+        "deckkrash",
+        "hellhound",
+        "seeya",
+        "pathfinder"
+      ],
+      "gear_limit": 4,
+      "prog_limit": 3,
+      "starting_eb": 1000
+    }
+  },
+  "rules_skeleton": {
+    "creation": [
+      "gear_budget",
+      "hp_formula",
+      "humanity_formula",
+      "methods",
+      "role_abilities",
+      "roles",
+      "skill_list",
+      "skill_max_at_creation",
+      "skill_pool_edgerunner",
+      "starting_eb",
+      "stat_list",
+      "stat_max",
+      "stat_min",
+      "stat_pool_edgerunner"
+    ],
+    "combat": [
+      "aimed_shot_multipliers",
+      "aimed_shot_penalties",
+      "armor_ablation",
+      "autofire_rules",
+      "critical_injury_bonus",
+      "critical_injury_table",
+      "critical_injury_trigger",
+      "death_save_formula",
+      "dv_table",
+      "initiative_formula",
+      "melee_opposed_by",
+      "range_dv",
+      "ranged_defense",
+      "rof_rules",
+      "wound_penalties",
+      "wound_states"
+    ],
+    "armor": [
+      "table"
+    ],
+    "weapons": [
+      "table"
+    ],
+    "cyberware": [
+      "humanity_loss_rules",
+      "table"
+    ],
+    "netrunning": [
+      "architectures",
+      "black_ice",
+      "interface_dv",
+      "program_list"
+    ],
+    "gear": [
+      "services",
+      "table"
+    ]
+  },
+  "rules_status": {
+    "book": "Cyberpunk RED Core Rulebook",
+    "packs": {
+      "armor": {
+        "total": 1,
+        "verified": 0,
+        "unverified": 1
+      },
+      "combat": {
+        "total": 16,
+        "verified": 0,
+        "unverified": 16
+      },
+      "creation": {
+        "total": 14,
+        "verified": 0,
+        "unverified": 14
+      },
+      "cyberware": {
+        "total": 2,
+        "verified": 0,
+        "unverified": 2
+      },
+      "gear": {
+        "total": 2,
+        "verified": 0,
+        "unverified": 2
+      },
+      "netrunning": {
+        "total": 4,
+        "verified": 0,
+        "unverified": 4
+      },
+      "weapons": {
+        "total": 1,
+        "verified": 0,
+        "unverified": 1
+      }
+    },
+    "house_hits": {
+      "creation.stat_min": 2,
+      "creation.stat_max": 8,
+      "creation.stat_pool_edgerunner": 60,
+      "creation.skill_pool_edgerunner": 30,
+      "creation.skill_max_at_creation": 6
+    }
+  },
+  "output_schema": {
+    "book": "Cyberpunk RED Core Rulebook",
+    "extractor": "grok",
+    "entries": [
+      {
+        "pack": "creation",
+        "key": "stat_pool_edgerunner",
+        "value": "<точное значение из книги>",
+        "page": "<int>",
+        "quote": "<дословная цитата <=200 символов>",
+        "confidence": "high|medium|low"
+      }
+    ],
+    "not_found": [
+      {
+        "pack": "...",
+        "key": "...",
+        "reason": "..."
+      }
+    ],
+    "code_discrepancies": [
+      {
+        "symbol": "engine.WEAPONS.heavy_pistol.damage",
+        "code": "3d6",
+        "book": "3d6",
+        "page": "<int>",
+        "verdict": "ok|mismatch",
+        "quote": "<=200 символов"
+      }
+    ]
+  }
+}

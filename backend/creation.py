@@ -1,32 +1,45 @@
-"""Полноценное создание персонажа: point-buy статы, навыки, снаряжение, программы.
-Не зависит от chargen.py; используется и быстрым /chargen, и полным билдером онлайна."""
+"""Создание персонажа. Все пулы, списки и лимиты берутся из data/rules (книга).
+Пресеты ролей остаются как ЯВНЫЕ домашние шаблоны для быстрого теста."""
 import random
+
+from backend import rules
 
 ROLE_ALIASES = {
     "techie": "Tech", "tech": "Tech", "netrunner": "Netrunner", "solo": "Solo",
     "rockerboy": "Rockerboy", "fixer": "Fixer", "nomad": "Nomad",
     "medtech": "Medtech", "lawman": "Lawman", "exec": "Exec", "media": "Media",
 }
-ROLES = ["Solo", "Netrunner", "Tech", "Rockerboy", "Fixer", "Nomad",
-         "Medtech", "Lawman", "Exec", "Media"]
 
-STATS = ["INT", "REF", "DEX", "TECH", "COOL", "WILL", "LUCK", "MOVE", "BODY", "EMP"]
-STAT_POOL, STAT_MIN, STAT_MAX = 60, 2, 8
-SKILL_POOL, SKILL_MAX = 30, 6
-SKILLS = ["handgun", "melee_weapon", "martial_arts", "evasion", "athletics",
-          "perception", "stealth", "persuasion", "conversation", "intimidation",
-          "trading", "interface", "programming", "electronics_security_tech",
-          "basic_tech", "weaponstech", "drive_land_vehicle", "first_aid",
-          "streetwise", "deduction"]
-GEAR = ["agent", "cyberdeck", "toolkit", "medkit", "flashlight", "lockpick",
-        "grapple", "camera", "armored_jacket", "restraints"]
-WEAPON_CHOICES = ["heavy_pistol", "medium_pistol", "knife", "baton",
-                  "assault_rifle", "shotgun", "sniper_rifle"]
-ARMOR_CHOICES = ["leathers", "light_armorjack", "medium_armorjack",
-                 "heavy_armorjack", "kevlar"]
-PROGRAMS = ["sword", "armor", "shield", "banhammer", "deckkrash",
-            "hellhound", "seeya", "pathfinder"]
-GEAR_LIMIT, PROG_LIMIT = 4, 3
+# Домашние значения по умолчанию: используются ТОЛЬКО пока книга не подтверждена,
+# и всегда помечаются в options() как house.
+HOUSE = {
+    "roles": ["Solo", "Netrunner", "Tech", "Rockerboy", "Fixer", "Nomad",
+              "Medtech", "Lawman", "Exec", "Media"],
+    "stat_list": ["INT", "REF", "DEX", "TECH", "COOL", "WILL", "LUCK", "MOVE", "BODY", "EMP"],
+    "stat_min": 2, "stat_max": 8,
+    "stat_pool_edgerunner": 60, "skill_pool_edgerunner": 30, "skill_max_at_creation": 6,
+    "skill_list": [
+        {"key": "handgun", "stat": "REF"}, {"key": "melee_weapon", "stat": "DEX"},
+        {"key": "martial_arts", "stat": "DEX"}, {"key": "evasion", "stat": "DEX"},
+        {"key": "athletics", "stat": "DEX"}, {"key": "perception", "stat": "INT"},
+        {"key": "stealth", "stat": "DEX"}, {"key": "persuasion", "stat": "COOL"},
+        {"key": "conversation", "stat": "EMP"}, {"key": "intimidation", "stat": "COOL"},
+        {"key": "trading", "stat": "COOL"}, {"key": "interface", "stat": "INT"},
+        {"key": "programming", "stat": "INT"},
+        {"key": "electronics_security_tech", "stat": "TECH"},
+        {"key": "basic_tech", "stat": "TECH"}, {"key": "weaponstech", "stat": "TECH"},
+        {"key": "drive_land_vehicle", "stat": "REF"}, {"key": "first_aid", "stat": "TECH"},
+        {"key": "streetwise", "stat": "COOL"}, {"key": "deduction", "stat": "INT"},
+    ],
+    "gear": ["agent", "cyberdeck", "toolkit", "medkit", "flashlight", "lockpick",
+             "grapple", "camera", "armored_jacket", "restraints"],
+    "weapons": ["heavy_pistol", "medium_pistol", "knife", "baton",
+                "assault_rifle", "shotgun", "sniper_rifle"],
+    "armors": ["leathers", "light_armorjack", "medium_armorjack", "heavy_armorjack", "kevlar"],
+    "programs": ["sword", "armor", "shield", "banhammer", "deckkrash",
+                 "hellhound", "seeya", "pathfinder"],
+    "gear_limit": 4, "prog_limit": 3, "starting_eb": 1000,
+}
 
 HANDLES = ["Вектор", "Никс", "Ржавчина", "Спектр", "Кобальт", "Шрам", "Люмен", "Гризли"]
 
@@ -51,10 +64,31 @@ _DEFAULT = {"stats": {"INT": 4, "REF": 4, "DEX": 4, "TECH": 4, "COOL": 5, "WILL"
             "gear": ["agent"], "cyber": ["Neural Link"], "programs": []}
 
 
+def _book(key, pack="creation"):
+    """Значение из книги либо явный house-fallback."""
+    return rules.get(pack, key, house=HOUSE.get(key))
+
+
+def _sources(keys):
+    return {k: rules.provenance("creation", k) for k in keys}
+
+
+def limits():
+    return {
+        "stat_min": int(_book("stat_min")), "stat_max": int(_book("stat_max")),
+        "stat_pool": int(_book("stat_pool_edgerunner")),
+        "skill_pool": int(_book("skill_pool_edgerunner")),
+        "skill_max": int(_book("skill_max_at_creation")),
+        "gear_limit": int(HOUSE["gear_limit"]), "prog_limit": int(HOUSE["prog_limit"]),
+    }
+
+
 def normalize_role(role):
+    roles = _book("roles")
     if not role:
-        return random.choice(ROLES)
-    return ROLE_ALIASES.get(str(role).strip().lower(), "Solo")
+        return random.choice(roles)
+    r = ROLE_ALIASES.get(str(role).strip().lower(), "Solo")
+    return r if r in roles else roles[0]
 
 
 def preset(role):
@@ -64,13 +98,17 @@ def preset(role):
 
 def _finalize(name, role, stats, skills, weapon, armor, gear, cyber, programs):
     body, will, emp = stats.get("BODY", 4), stats.get("WILL", 4), stats.get("EMP", 4)
-    hp = body + will + 2
+    hp_formula = rules.get("creation", "hp_formula", house="BODY+WILL+2 (house)")
+    hp = body + will + 2  # масштаб до подтверждения формулы по книге
     return {
         "name": name, "role": role, "stats": dict(stats), "skills": dict(skills),
         "hp": hp, "max_hp": hp, "wound": "unharmed", "dsp": 0, "dead": False,
-        "armor": armor, "weapon": weapon, "eb": 1000, "humanity": emp * 10,
-        "cyberware": list(cyber), "inventory": list(dict.fromkeys([weapon, armor] + gear)),
+        "armor": armor, "weapon": weapon, "eb": int(_book("starting_eb")),
+        "humanity": emp * 10, "cyberware": list(cyber),
+        "inventory": list(dict.fromkeys([weapon, armor] + gear)),
         "programs": list(programs), "active_effects": [],
+        "rules_provenance": {"hp_formula": hp_formula,
+                             "sources": _sources(["stat_pool_edgerunner", "skill_pool_edgerunner"])},
     }
 
 
@@ -82,29 +120,46 @@ def random_character(role=None, name=None):
 
 def options(role=None):
     p, r = preset(role)
-    return {"role": r, "roles": ROLES, "stats": STATS, "stat_pool": STAT_POOL,
-            "stat_min": STAT_MIN, "stat_max": STAT_MAX, "skills": SKILLS,
-            "skill_pool": SKILL_POOL, "skill_max": SKILL_MAX, "gear": GEAR,
-            "gear_limit": GEAR_LIMIT, "weapons": WEAPON_CHOICES, "armors": ARMOR_CHOICES,
-            "programs": PROGRAMS, "prog_limit": PROG_LIMIT, "preset": p}
+    lim = limits()
+    skill_list = _book("skill_list")
+    return {
+        "role": r, "roles": _book("roles"),
+        "stats": _book("stat_list"),
+        "stat_min": lim["stat_min"], "stat_max": lim["stat_max"], "stat_pool": lim["stat_pool"],
+        "skills": [s["key"] if isinstance(s, dict) else s for s in skill_list],
+        "skill_stat": {s["key"]: s["stat"] for s in skill_list if isinstance(s, dict)},
+        "skill_pool": lim["skill_pool"], "skill_max": lim["skill_max"],
+        "gear": _book("gear"), "gear_limit": lim["gear_limit"],
+        "weapons": _book("weapons"), "armors": _book("armors"),
+        "programs": _book("programs"), "prog_limit": lim["prog_limit"],
+        "preset": p,
+        "sources": _sources(["roles", "stat_list", "stat_min", "stat_max",
+                             "stat_pool_edgerunner", "skill_pool_edgerunner",
+                             "skill_max_at_creation", "skill_list", "starting_eb"]),
+        "house_keys": sorted(k for k, v in rules.house_hits().items() if v is not None),
+    }
 
 
 def build(spec):
+    lim = limits()
     role = normalize_role(spec.get("role"))
-    stats = {k: int(spec.get("stats", {}).get(k, STAT_MIN)) for k in STATS}
-    if any(not (STAT_MIN <= v <= STAT_MAX) for v in stats.values()):
-        raise ValueError("статы вне диапазона 2..8")
-    if sum(stats.values()) > STAT_POOL:
-        raise ValueError(f"пул статов превышен (макс {STAT_POOL})")
-    skills = {k: int(v) for k, v in (spec.get("skills") or {}).items() if int(v) > 0}
-    if any(not (0 <= v <= SKILL_MAX) for v in skills.values()):
-        raise ValueError("навык вне диапазона 0..6")
-    if sum(skills.values()) > SKILL_POOL:
-        raise ValueError(f"пул навыков превышен (макс {SKILL_POOL})")
-    gear = [g for g in (spec.get("gear") or []) if g in GEAR][:GEAR_LIMIT]
-    weapon = spec.get("weapon") if spec.get("weapon") in WEAPON_CHOICES else "medium_pistol"
-    armor = spec.get("armor") if spec.get("armor") in ARMOR_CHOICES else "leathers"
-    programs = [p for p in (spec.get("programs") or []) if p in PROGRAMS][:PROG_LIMIT]
+    stat_keys = _book("stat_list")
+    stats = {k: int(spec.get("stats", {}).get(k, lim["stat_min"])) for k in stat_keys}
+    if any(not (lim["stat_min"] <= v <= lim["stat_max"]) for v in stats.values()):
+        raise ValueError(f"статы вне диапазона {lim['stat_min']}..{lim['stat_max']}")
+    if sum(stats.values()) > lim["stat_pool"]:
+        raise ValueError(f"пул статов превышен (макс {lim['stat_pool']})")
+    allowed = {s["key"] if isinstance(s, dict) else s for s in _book("skill_list")}
+    skills = {k: int(v) for k, v in (spec.get("skills") or {}).items()
+              if int(v) > 0 and k in allowed}
+    if any(v > lim["skill_max"] for v in skills.values()):
+        raise ValueError(f"навык выше лимита создания {lim['skill_max']}")
+    if sum(skills.values()) > lim["skill_pool"]:
+        raise ValueError(f"пул навыков превышен (макс {lim['skill_pool']})")
+    gear = [g for g in (spec.get("gear") or []) if g in _book("gear")][:lim["gear_limit"]]
+    weapon = spec.get("weapon") if spec.get("weapon") in _book("weapons") else "medium_pistol"
+    armor = spec.get("armor") if spec.get("armor") in _book("armors") else "leathers"
+    programs = [p for p in (spec.get("programs") or []) if p in _book("programs")][:lim["prog_limit"]]
     cyber = ["Neural Link"]
     if role == "Netrunner":
         cyber.append("Interface Plugs")

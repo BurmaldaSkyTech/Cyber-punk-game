@@ -935,7 +935,14 @@ def _act_core(sid: str, req: ActionIn):
     for m in [mech] + ([mech["second"]] if isinstance(mech.get("second"), dict) else []):
         if m.get("target_id"):
             st["threat"] = m["target_id"]
-
+    if st.get("threat") and not st.get("initiative_rolled"):
+        order = engine.roll_initiative(st["players"] + st["npcs"])
+        players_order = [n for n in order if n in st["order"]]
+        if players_order:
+            st["order"] = players_order
+            st["turn"] = 0
+        st["initiative_rolled"] = True
+        st["initiative"] = order
     info_kw = ("контракт", "детал", "цель", "информац", "чертеж", "план", "узна",
                "расскаж", "что нужно", "задан", "вопрос", "сколько плат")
     is_info = (mech.get("action_type") in ("social", "hack", "skill")
@@ -1414,4 +1421,66 @@ def data_recipes():
         out[k] = {"name": v["name"], "components": v["components"],
                   "skill": v["skill"], "dv": v["dv"]}
     return {"recipes": out}        
-    
+ 
+RULES_ADMIN_TOKEN = os.environ.get("RULES_ADMIN_TOKEN", "dev-rules-token")
+
+RULES_EXTRACT_SYS = """Ты — экстрактор правил из Cyberpunk RED Core Rulebook.
+Тебе дают фрагменты книги и имя параметра. Верни ТОЛЬКО JSON:
+{"value": <точное значение: число, строка, список или объект>,
+ "page": <номер страницы из фрагмента или null>,
+ "quote": <дословная цитата-обоснование, не длиннее 200 символов>,
+ "confidence": "high|medium|low"}
+ЗАПРЕЩЕНО додумывать: если во фрагментах нет ответа — {"value": null, "page": null, "quote": "", "confidence": "low"}.
+Таблицы возвращай объектом {ключ: {поля...}} строго как в книге."""
+
+
+def _require_rules_admin(token: str):
+    if token != RULES_ADMIN_TOKEN:
+        raise HTTPException(403, "Неверный админ-токен правил")
+
+
+@app.get("/rules/status")
+def rules_status():
+    from backend import rules
+    return rules.status()
+
+
+@app.post("/rules/propose")
+def rules_propose(req: dict):
+    """Достаёт кандидатов из книги через RAG. НИЧЕГО не записывает."""
+    from backend import rules
+    _require_rules_admin(req.get("token", ""))
+    pack = req.get("pack")
+    keys = req.get("keys") or []
+    out = []
+    for key in keys:
+        query = req.get("query") or f"{pack} {key} правила таблица значение"
+        hits = SEARCH.search(query, k=4)
+        ctx = "\n\n---\n\n".join(f"[{h['crumb']}] {h['text'][:900]}" for h in hits)
+        ans = chat_json([
+            {"role": "system", "content": RULES_EXTRACT_SYS},
+            {"role": "user", "content": f"Параметр: {pack}.{key}\n\nФрагменты книги:\n{ctx}"},
+        ], model=JUDGE_MODEL, temperature=0.0)
+        out.append({
+            "pack": pack, "key": key,
+            "candidate": ans.get("value"),
+            "page": ans.get("page"),
+            "quote": (ans.get("quote") or "")[:200],
+            "confidence": ans.get("confidence", "low"),
+            "chunks": [h["crumb"] for h in hits],
+            "current": rules.provenance(pack, key),
+        })
+    return {"proposals": out}
+
+
+@app.post("/rules/commit")
+def rules_commit(req: dict):
+    """Записывает значение как проверенное — только после сверки человеком со страницей."""
+    from backend import rules
+    _require_rules_admin(req.get("token", ""))
+    if req.get("page") in (None, ""):
+        raise HTTPException(400, "Обязателен номер страницы книги")
+    rec = rules.put(req["pack"], req["key"], req.get("value"),
+                    page=req.get("page"), chunk=req.get("chunk"),
+                    note=req.get("note", ""), verified=True)
+    return {"ok": True, "entry": rec, "status": rules.status()} 

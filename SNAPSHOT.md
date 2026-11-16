@@ -384,7 +384,14 @@ def _act_core(sid: str, req: ActionIn):
     for m in [mech] + ([mech["second"]] if isinstance(mech.get("second"), dict) else []):
         if m.get("target_id"):
             st["threat"] = m["target_id"]
-
+    if st.get("threat") and not st.get("initiative_rolled"):
+        order = engine.roll_initiative(st["players"] + st["npcs"])
+        players_order = [n for n in order if n in st["order"]]
+        if players_order:
+            st["order"] = players_order
+            st["turn"] = 0
+        st["initiative_rolled"] = True
+        st["initiative"] = order
     info_kw = ("контракт", "детал", "цель", "информац", "чертеж", "план", "узна",
                "расскаж", "что нужно", "задан", "вопрос", "сколько плат")
     is_info = (mech.get("action_type") in ("social", "hack", "skill")
@@ -719,9 +726,7 @@ def broadcast_now(sid, message):
 
 --- resolve_check ---
 def resolve_check(state, actor, judge):
-    """Обрабатывает действие игрока и возвращает механику результата."""
-    
-    # === FREE-ДЕЙСТВИЯ: без броска ===
+    """Обрабатывает действие игрока. Числа и модификаторы — из data/rules (книга)."""
     if judge.get("action_type") == "free":
         return {
             "dice": None, "die_total": None, "stat": None, "skill": None,
@@ -730,205 +735,168 @@ def resolve_check(state, actor, judge):
             "actor": actor["name"], "action_type": "free",
             "skill": "", "stat_key": None, "dv_key": None, "no_roll": True,
         }
-    
-    # === ПОДГОТОВКА БРОСКА ===
+
+    at = judge.get("action_type", "skill")
+    target = _find_target(state, actor, judge, at)
+
+    dv_table = rules.get("combat", "dv_table", house=DV)
     dv_key = judge.get("dv_key", "everyday")
-    dv = judge.get("dv") or DV.get(dv_key, 13)
+    dv = judge.get("dv") or dv_table.get(dv_key, 13)
+
     skill = judge.get("skill") or ""
     stat_key = SKILL_STAT.get(skill, judge.get("stat", "COOL"))
+    book_skills = rules.get_optional("creation", "skill_list")
+    if isinstance(book_skills, list):
+        mapped = {s["key"]: s["stat"] for s in book_skills
+                  if isinstance(s, dict) and s.get("key") and s.get("stat")}
+        stat_key = mapped.get(skill, stat_key)
+    elif isinstance(book_skills, dict):
+        stat_key = book_skills.get(skill, stat_key)
     stat = actor["stats"].get(stat_key, 2)
     sk_lvl = actor["skills"].get(skill, 0)
-    
-    # Штраф за ранения из модульной системы
-    wound_state = get_wound_state(actor.get("hp", actor.get("max_hp", 10)), 
-                                   actor.get("max_hp", 10))
-    mods = get_wound_penalty(wound_state)
-    
-    # === БРОСОК ===
+
+    wound_state = get_wound_state(actor.get("hp", actor.get("max_hp", 10)),
+                                  actor.get("max_hp", 10))
+    wound_pen = rules.get_optional("combat", "wound_penalties")
+    mods = wound_pen.get(wound_state, 0) if isinstance(wound_pen, dict) else get_wound_penalty(wound_state)
+
+    location = (judge.get("location") or "auto")
+    aimed_pen = 0
+    if at in ("attack_ranged", "attack_melee"):
+        penalties = _crule("aimed_shot_penalties") or {}
+        aimed_pen = int(penalties.get(location, 0))
+        mods += aimed_pen
+
     mech = skill_check(stat, sk_lvl, dv, mods)
-    mech["location"] = (judge or {}).get("location") or "auto"    
     mech.update({
-        "actor": actor["name"],
-        "action_type": judge.get("action_type", "skill"),
-        "skill": skill,
-        "stat_key": stat_key,
-        "dv_key": dv_key,
-        "wound_state": wound_state,
-        "wound_penalty": mods,
+        "actor": actor["name"], "action_type": at, "skill": skill,
+        "stat_key": stat_key, "dv_key": dv_key,
+        "wound_state": wound_state, "wound_penalty": wound_pen if isinstance(wound_pen, dict) else mods,
+        "location": location, "aimed_penalty": aimed_pen,
     })
 
-    # === ОРУЖИЕ ПО УМОЛЧАНИЮ ===
-    at = mech["action_type"]
     if at == "attack_ranged" and not judge.get("weapon"):
         judge["weapon"] = "heavy_pistol"
     if at == "attack_melee" and not judge.get("weapon"):
         judge["weapon"] = "knife"
 
-    # === ТРАНСПОРТ: вождение и таран ===
+    # === ТРАНСПОРТ ===
     if at == "drive":
         vehicle_key = actor.get("vehicle")
         if not vehicle_key:
-            mech.update({"drive_result": "no_vehicle",
-                         "reason": "Персонаж не в транспорте"})
+            mech.update({"drive_result": "no_vehicle", "reason": "Персонаж не в транспорте"})
             return mech
         from . import vehicles as veh_mod
         v = veh_mod.get_vehicle(vehicle_key)
-        mech.update({
-            "drive_result": "maneuver",
-            "vehicle": vehicle_key,
-            "vehicle_name": (v or {}).get("name", vehicle_key),
-        })
+        mech.update({"drive_result": "maneuver", "vehicle": vehicle_key,
+                     "vehicle_name": (v or {}).get("name", vehicle_key)})
 
     if at == "ram":
         attacker_vehicle = actor.get("vehicle")
         if not attacker_vehicle:
-            mech.update({"ram_result": "no_vehicle",
-                         "reason": "Персонаж не в транспорте"})
+            mech.update({"ram_result": "no_vehicle", "reason": "Персонаж не в транспорте"})
             return mech
         from . import vehicles as veh_mod
         target_vehicle = (target or {}).get("vehicle")
         dmg = veh_mod.ram_damage(attacker_vehicle, target_vehicle or "car_compact")
         mech.update({
             "ram_result": "hit" if mech["success"] else "miss",
-            "ram_raw": dmg["raw"],
-            "ram_sp": dmg["sp"],
+            "ram_raw": dmg["raw"], "ram_sp": dmg["sp"],
             "ram_net": dmg["net"] if mech["success"] else 0,
             "target": (target or {}).get("name"),
         })
         if target is not None and mech["success"] and dmg["net"] > 0:
-            damage_result = apply_damage(target, dmg["net"])
-            target["hp"] = damage_result["hp"]
-            target["wound"] = damage_result["wound_state"]
+            dr = apply_damage(target, dmg["net"])
+            target["hp"] = dr["hp"]
+            target["wound"] = dr["wound_state"]
             mech["target_hp"] = target["hp"]
             mech["target_wound"] = target["wound"]
+            mech["target_id"] = target["id"]
 
-    # === ПОИСК ЦЕЛИ ===
-    target = None
-    if judge.get("target"):
-        target = next((n for n in state["npcs"] if n["id"] == judge.get("target")), None)
-    
-    if target is None and at in ("attack_ranged", "attack_melee"):
-        low = (judge.get("_text") or "").lower()
-        target = next((n for n in state["npcs"] if n["name"].lower() in low), None)
-        if target is None:
-            target = next((n for n in state["npcs"] if n["id"] == state.get("threat")), None)
-        if target is None and state["npcs"]:
-            target = state["npcs"][0]
-
-    # Нетраннинг
-    at = mech["action_type"]
+    # === НЕТРАННИНГ ===
     if at == "hack":
-        # Проверяем, есть ли у персонажа Interface Plugs
         cyberware = actor.get("cyberware", [])
-        has_interface = any("interface" in c.lower() for c in cyberware)
-        
-        if not has_interface:
-            mech.update({
-                "hack_result": "no_interface",
-                "reason": "Нет Interface Plugs для входа в сеть",
-            })
+        if not any("interface" in c.lower() for c in cyberware):
+            mech.update({"hack_result": "no_interface",
+                         "reason": "Нет Interface Plugs для входа в сеть"})
             return mech
-        
-        # Успешный вход в сеть
         if mech["success"]:
             arch_key = judge.get("architecture", "simple")
             net_state = netrunning.enter_architecture(actor, arch_key)
-            
             if net_state["success"]:
-                mech.update({
-                    "hack_result": "entered",
-                    "architecture": arch_key,
-                    "floor": 1,
-                    "max_floors": net_state["max_floors"],
-                    "dv": net_state["dv"],
-                })
+                mech.update({"hack_result": "entered", "architecture": arch_key,
+                             "floor": 1, "max_floors": net_state["max_floors"],
+                             "net_dv": net_state["dv"]})
             else:
-                mech.update({
-                    "hack_result": "failed",
-                    "reason": net_state.get("reason", "Не удалось войти"),
-                })
+                mech.update({"hack_result": "failed",
+                             "reason": net_state.get("reason", "Не удалось войти")})
         else:
-            mech.update({
-                "hack_result": "failed_check",
-                "reason": "Провал проверки interface",
-            })
+            mech.update({"hack_result": "failed_check", "reason": "Провал проверки interface"})
 
-    # === ПРИМЕНЕНИЕ УРОНА ===
+    # === УРОН ===
     if at in ("attack_ranged", "attack_melee") and mech["success"]:
         wkey = judge.get("weapon", "heavy_pistol" if at == "attack_ranged" else "knife")
-        move_key = judge.get("move")  # приём боевого искусства (опционально)
-        
+        move_key = judge.get("move")
         w = WEAPONS.get(wkey, {"damage": "2d6"})
-        
-        # Бросок урона
+
         dmg, faces = roll_dice(w.get("damage", "2d6"))
         sixes = sum(1 for f in faces if f == 6)
-        crit = sixes >= 2
-        
-        # Защита брони
-        sp = ARMOR.get((target or {}).get("armor", "leathers"), {}).get("sp", 0) if target else 0
-        net = max(0, dmg - sp)
-        
-        # Бонус от приёма боевого искусства
+        crit = sixes >= int(_crule("critical_injury_trigger") or 2)
+
+        mults = _crule("aimed_shot_multipliers") or {}
+        mult = float(mults.get(location, 1))
+        raw = int(round(dmg * mult))
+
+        sp = armor_sp(target) if target else 0
+        net = max(0, raw - sp)
+
         martial_effect = None
         martial_effect_desc = ""
-        
         if move_key and move_key in martial.MOVES:
             net = martial.apply_move_bonus(move_key, net)
             martial_effect, martial_effect_desc = martial.get_move_effect(move_key)
-        
-        # Бонус за критический успех
-        bonus = 5 if crit else 0
+
+        bonus = int(_crule("critical_injury_bonus") or 0) if crit else 0
         total_damage = net + bonus
-        
+
         mech.update({
-            "weapon": wkey,
-            "damage_roll": faces,
-            "damage": dmg,
-            "armor_sp": sp,
-            "net_damage": net,
-            "bonus_damage": bonus,
-            "total_damage": total_damage,
-            "target": (target or {}).get("name"),
-            "critical_success": crit,
-            "martial_move": move_key,
-            "martial_effect": martial_effect,
-            "martial_effect_desc": martial_effect_desc,
+            "weapon": wkey, "damage_roll": faces, "damage": dmg,
+            "damage_multiplier": mult, "damage_after_multiplier": raw,
+            "armor_sp": sp, "net_damage": net, "bonus_damage": bonus,
+            "total_damage": total_damage, "target": (target or {}).get("name"),
+            "critical_success": crit, "martial_move": move_key,
+            "martial_effect": martial_effect, "martial_effect_desc": martial_effect_desc,
         })
-        
+
         if target is not None:
             mech["target_id"] = target["id"]
-            
-            # Применяем урон через модульную систему
+            abl = ablate_armor(target, raw > sp)
+            if abl:
+                mech["armor_ablation"] = abl
             if total_damage > 0:
-                damage_result = apply_damage(target, total_damage, weapon_key=wkey)
-                
-                # Обновляем цель
-                target["hp"] = damage_result["hp"]
-                target["wound"] = damage_result["wound_state"]
-                target["wound_penalty"] = damage_result["penalty"]
-                
-                # Критическая травма
-                if damage_result["critical_injury"]:
-                    mech["critical_injury"] = damage_result["critical_injury"]
-                
-                # Бросок смерти при смертельном ранении
-                if damage_result["death_save"]:
+                dr = (apply_damage(target, total_damage, weapon_key=wkey, crit=crit)
+                      if _ACCEPTS_CRIT else apply_damage(target, total_damage, weapon_key=wkey))
+                target["hp"] = dr["hp"]
+                target["wound"] = dr["wound_state"]
+                target["wound_penalty"] = dr["penalty"]
+                injury = dr.get("critical_injury")
+                if injury and crit:
+                    mech["critical_injury"] = injury
+                elif injury and not crit:
+                    mech["injury_suppressed"] = injury  # не подтверждено кубиками — не объявляем критом
+                if dr.get("death_save"):
                     death_result = death_save(target)
                     target["dead"] = death_result["dead"]
                     mech["death_save"] = death_result
                     if death_result["dead"]:
                         mech["target_dead"] = True
-                
-                # Эффект приёма боевого искусства
                 if martial_effect == "sweep" and not target.get("dead"):
                     target["prone"] = True
                 elif martial_effect == "disarm" and not target.get("dead"):
                     target["disarmed"] = True
-                
                 mech["target_hp"] = target["hp"]
                 mech["target_wound"] = target["wound"]
-    
+
     return mech
 
 --- resolve_npc_reaction ---
@@ -1043,26 +1011,19 @@ ROLE_ALIASES = {
 }
 
 --- ROLES ---
-ROLES = ["Solo", "Netrunner", "Tech", "Rockerboy", "Fixer", "Nomad",
-         "Medtech", "Lawman", "Exec", "Media"]
+NOT FOUND
 
 --- STATS ---
-STATS = ["INT", "REF", "DEX", "TECH", "COOL", "WILL", "LUCK", "MOVE", "BODY", "EMP"]
+NOT FOUND
 
 --- SKILLS ---
-SKILLS = ["handgun", "melee_weapon", "martial_arts", "evasion", "athletics",
-          "perception", "stealth", "persuasion", "conversation", "intimidation",
-          "trading", "interface", "programming", "electronics_security_tech",
-          "basic_tech", "weaponstech", "drive_land_vehicle", "first_aid",
-          "streetwise", "deduction"]
+NOT FOUND
 
 --- GEAR ---
-GEAR = ["agent", "cyberdeck", "toolkit", "medkit", "flashlight", "lockpick",
-        "grapple", "camera", "armored_jacket", "restraints"]
+NOT FOUND
 
 --- PROGRAMS ---
-PROGRAMS = ["sword", "armor", "shield", "banhammer", "deckkrash",
-            "hellhound", "seeya", "pathfinder"]
+NOT FOUND
 
 --- ROLE_PRESETS ---
 ROLE_PRESETS = {
@@ -1083,9 +1044,11 @@ ROLE_PRESETS = {
 
 --- normalize_role ---
 def normalize_role(role):
+    roles = _book("roles")
     if not role:
-        return random.choice(ROLES)
-    return ROLE_ALIASES.get(str(role).strip().lower(), "Solo")
+        return random.choice(roles)
+    r = ROLE_ALIASES.get(str(role).strip().lower(), "Solo")
+    return r if r in roles else roles[0]
 
 --- preset ---
 def preset(role):
@@ -1101,29 +1064,46 @@ def random_character(role=None, name=None):
 --- options ---
 def options(role=None):
     p, r = preset(role)
-    return {"role": r, "roles": ROLES, "stats": STATS, "stat_pool": STAT_POOL,
-            "stat_min": STAT_MIN, "stat_max": STAT_MAX, "skills": SKILLS,
-            "skill_pool": SKILL_POOL, "skill_max": SKILL_MAX, "gear": GEAR,
-            "gear_limit": GEAR_LIMIT, "weapons": WEAPON_CHOICES, "armors": ARMOR_CHOICES,
-            "programs": PROGRAMS, "prog_limit": PROG_LIMIT, "preset": p}
+    lim = limits()
+    skill_list = _book("skill_list")
+    return {
+        "role": r, "roles": _book("roles"),
+        "stats": _book("stat_list"),
+        "stat_min": lim["stat_min"], "stat_max": lim["stat_max"], "stat_pool": lim["stat_pool"],
+        "skills": [s["key"] if isinstance(s, dict) else s for s in skill_list],
+        "skill_stat": {s["key"]: s["stat"] for s in skill_list if isinstance(s, dict)},
+        "skill_pool": lim["skill_pool"], "skill_max": lim["skill_max"],
+        "gear": _book("gear"), "gear_limit": lim["gear_limit"],
+        "weapons": _book("weapons"), "armors": _book("armors"),
+        "programs": _book("programs"), "prog_limit": lim["prog_limit"],
+        "preset": p,
+        "sources": _sources(["roles", "stat_list", "stat_min", "stat_max",
+                             "stat_pool_edgerunner", "skill_pool_edgerunner",
+                             "skill_max_at_creation", "skill_list", "starting_eb"]),
+        "house_keys": sorted(k for k, v in rules.house_hits().items() if v is not None),
+    }
 
 --- build ---
 def build(spec):
+    lim = limits()
     role = normalize_role(spec.get("role"))
-    stats = {k: int(spec.get("stats", {}).get(k, STAT_MIN)) for k in STATS}
-    if any(not (STAT_MIN <= v <= STAT_MAX) for v in stats.values()):
-        raise ValueError("статы вне диапазона 2..8")
-    if sum(stats.values()) > STAT_POOL:
-        raise ValueError(f"пул статов превышен (макс {STAT_POOL})")
-    skills = {k: int(v) for k, v in (spec.get("skills") or {}).items() if int(v) > 0}
-    if any(not (0 <= v <= SKILL_MAX) for v in skills.values()):
-        raise ValueError("навык вне диапазона 0..6")
-    if sum(skills.values()) > SKILL_POOL:
-        raise ValueError(f"пул навыков превышен (макс {SKILL_POOL})")
-    gear = [g for g in (spec.get("gear") or []) if g in GEAR][:GEAR_LIMIT]
-    weapon = spec.get("weapon") if spec.get("weapon") in WEAPON_CHOICES else "medium_pistol"
-    armor = spec.get("armor") if spec.get("armor") in ARMOR_CHOICES else "leathers"
-    programs = [p for p in (spec.get("programs") or []) if p in PROGRAMS][:PROG_LIMIT]
+    stat_keys = _book("stat_list")
+    stats = {k: int(spec.get("stats", {}).get(k, lim["stat_min"])) for k in stat_keys}
+    if any(not (lim["stat_min"] <= v <= lim["stat_max"]) for v in stats.values()):
+        raise ValueError(f"статы вне диапазона {lim['stat_min']}..{lim['stat_max']}")
+    if sum(stats.values()) > lim["stat_pool"]:
+        raise ValueError(f"пул статов превышен (макс {lim['stat_pool']})")
+    allowed = {s["key"] if isinstance(s, dict) else s for s in _book("skill_list")}
+    skills = {k: int(v) for k, v in (spec.get("skills") or {}).items()
+              if int(v) > 0 and k in allowed}
+    if any(v > lim["skill_max"] for v in skills.values()):
+        raise ValueError(f"навык выше лимита создания {lim['skill_max']}")
+    if sum(skills.values()) > lim["skill_pool"]:
+        raise ValueError(f"пул навыков превышен (макс {lim['skill_pool']})")
+    gear = [g for g in (spec.get("gear") or []) if g in _book("gear")][:lim["gear_limit"]]
+    weapon = spec.get("weapon") if spec.get("weapon") in _book("weapons") else "medium_pistol"
+    armor = spec.get("armor") if spec.get("armor") in _book("armors") else "leathers"
+    programs = [p for p in (spec.get("programs") or []) if p in _book("programs")][:lim["prog_limit"]]
     cyber = ["Neural Link"]
     if role == "Netrunner":
         cyber.append("Interface Plugs")
