@@ -533,6 +533,32 @@ function buildActionsPanel() {
   return div;
 }
 
+function buildContractPanel() {
+  const beats = currentState.revealed_beats || [];
+  const div = document.createElement('div');
+  div.className = 'char-panel';
+  div.innerHTML = `<h3 style="color:#ffd700">Контракт ${currentState.contract_given ? '✅ выдан' : '⏳ не выдан'}</h3>` +
+    (beats.length ? beats.map(b => `<div class="panel-small">— ${b}</div>`).join('')
+                  : '<div class="panel-small">Детали не раскрыты</div>');
+  return div;
+}
+
+function renderPanels() {
+  const left = document.getElementById('panel-left');
+  const right = document.getElementById('panel-right');
+  left.innerHTML = ''; right.innerHTML = '';
+  const act = activeName();
+  (currentState.players || []).forEach((p, i) => {
+    const panel = buildCharPanel(p, p.name === act);
+    (i % 2 === 0 ? left : right).appendChild(panel);
+  });
+  const ap = buildActionsPanel();
+  if (ap) left.appendChild(ap);
+  left.appendChild(buildContractPanel());
+  if (currentState.chase && currentState.chase.status === 'active') right.appendChild(buildChasePanel());
+  right.appendChild(buildNpcPanel());
+}
+
 function renderPanels() {
   const left = document.getElementById('panel-left');
   const right = document.getElementById('panel-right');

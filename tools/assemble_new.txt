@@ -1,0 +1,45 @@
+def assemble_narration(mech, actor_name, flavor, extra=None):
+    """Исходы всегда из механики; художественный текст — только из flavor-слотов."""
+    lines = []
+    at = mech.get("action_type")
+    if mech.get("no_roll"):
+        lines.append(f"{actor_name}: {flavor['action']}. Действие не требует броска.")
+    elif at in ("attack_ranged", "attack_melee"):
+        lines.append(f"{actor_name}: {flavor['action']}.")
+        if flavor["hit"]:
+            lines.append(flavor["hit"])
+        lines += _attack_outcome_lines(mech)
+        second = mech.get("second")
+        if isinstance(second, dict) and second.get("action_type") in ("attack_ranged", "attack_melee"):
+            lines += _attack_outcome_lines(second)
+    else:
+        lines.append(f"{actor_name}: {flavor['action']}.")
+        lines.append(f"Проверка {mech.get('stat_key')}+{mech.get('skill')}: "
+                     f"{mech.get('total')} против DV{mech.get('dv')} — "
+                     f"{'УСПЕХ' if mech.get('success') else 'ПРОВАЛ'}.")
+        if flavor["hit"]:
+            lines.append(flavor["hit"])
+
+    for x in (extra or []):
+        lines.append(x)
+
+    r = mech.get("npc_reaction")
+    if r:
+        shots = r.get("shots", [])
+        for i, s in enumerate(shots):
+            fl = flavor["shots"][i] if i < len(flavor["shots"]) else "трассер режет дым над стойкой"
+            if s["success"]:
+                net = s.get("net_damage", 0)
+                if net > 0:
+                    out = (f"пуля попадает в {r.get('target_player')}: урон {s.get('damage', 0)} - "
+                           f"SP{s.get('armor_sp', 0)} = {net}, HP игрока {s.get('player_hp', '?')}.")
+                else:
+                    out = (f"пуля попадает в {r.get('target_player')}, но броня SP{s.get('armor_sp', 0)} "
+                           f"поглощает весь урон {s.get('damage', 0)}: раны нет.")
+            else:
+                out = f"выстрел в {r.get('target_player')} проходит мимо."
+            lines.append(f"{s['npc']}: {fl}. {out}")
+        p = r.get("principal")
+        if p:
+            lines.append(f"{p['npc']}: {flavor['principal']}. {p['text']}.")
+    return "\n".join(lines)

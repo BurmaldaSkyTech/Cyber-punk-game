@@ -579,3 +579,25 @@ def test_detect_departure_ignores_roleplay():
 
     leave, yes, no = m.detect_departure_intent("нет, передумал")
     assert no is True 
+
+def test_handover_contract_reveals_all_and_pays():
+    from backend import main as m
+
+    st = {"players": [{"name": "A", "eb": 0}], "revealed_beats": [],
+          "contract": {"pay": 2000, "advance": 0}, "granted": []}
+    lines = m.handover_contract(st)
+    assert st["contract_given"] is True
+    assert st["revealed_beats"] == m.CONTRACT_BEATS
+    assert st["players"][0]["eb"] == 500
+    assert lines
+    assert m.handover_contract(st) == []  # идемпотентно
+
+
+def test_assemble_includes_extra():
+    from backend import main as m
+
+    mech = {"action_type": "social", "success": True, "stat_key": "COOL",
+            "skill": "persuasion", "total": 20, "dv": 13}
+    out = m.assemble_narration(mech, "A", m.sanitize_flavor({}, 0),
+                               extra=["Кесслер раскрывает деталь: ЦЕЛЬ"])
+    assert "ЦЕЛЬ" in out    

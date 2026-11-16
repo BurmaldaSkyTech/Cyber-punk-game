@@ -643,7 +643,7 @@ def _attack_outcome_lines(m):
     return lines
 
 
-def assemble_narration(mech, actor_name, flavor):
+def assemble_narration(mech, actor_name, flavor, extra=None):
     """Исходы всегда из механики; художественный текст — только из flavor-слотов."""
     lines = []
     at = mech.get("action_type")
@@ -664,6 +664,9 @@ def assemble_narration(mech, actor_name, flavor):
                      f"{'УСПЕХ' if mech.get('success') else 'ПРОВАЛ'}.")
         if flavor["hit"]:
             lines.append(flavor["hit"])
+
+    for x in (extra or []):
+        lines.append(x)
 
     r = mech.get("npc_reaction")
     if r:
@@ -686,11 +689,6 @@ def assemble_narration(mech, actor_name, flavor):
             lines.append(f"{p['npc']}: {flavor['principal']}. {p['text']}.")
     return "\n".join(lines)
 
-ACT3_SCENE = ("Внутренний периметр дата-узла Biotechnica. Коридоры с серым линолеумом, "
-              "гул серверных за стенами, камеры под потолком. Служебные двери с кодовыми "
-              "замками, патрули охраны проходят каждые несколько минут. Где-то в глубине — "
-              "стойка регистрации и лифт на нижние уровни.")
-
 
 def suggest_followups(st, mech):
     act = st.get("act", "fixer")
@@ -708,6 +706,125 @@ def suggest_followups(st, mech):
     if not mech.get("no_roll") and not mech.get("success"):
         base = base + ["Повторить попытку другим путём"]
     return base[:4]
+
+def handover_contract(st):
+    """Фиксер выполняет свою цель: передаёт контракт и аванс. Идемпотентно."""
+    if st.get("contract_given"):
+        return []
+    st["contract_given"] = True
+    remaining = [b for b in CONTRACT_BEATS if b not in st["revealed_beats"]]
+    st["revealed_beats"] = list(CONTRACT_BEATS)
+    advance = (st.get("contract") or {}).get("advance") or 500
+    for p in st["players"]:
+        p["eb"] = p.get("eb", 0) + advance
+    st.setdefault("granted", []).append("дата-планшет с контрактом")
+    lines = ["Кесслер двигает по столу дата-планшет: «Контракт ваш. Аванс на счетах, детали внутри.»"]
+    lines += [f"— {b}" for b in remaining]
+    lines.append(f"Аванс {advance} eb каждому игроку. Планшет контракта у партии.")
+    return lines
+
+
+def apply_world_ticks(st, mech):
+    """Детерминированные тики мира: heat и длительности эффектов."""
+    notes = []
+    at = mech.get("action_type")
+    if at in ("attack_ranged", "attack_melee", "ram"):
+        st["heat"] = min(10, st.get("heat", 0) + 1)
+    elif at in ("hack", "skill") and not mech.get("no_roll") and not mech.get("success"):
+        st["heat"] = min(10, st.get("heat", 0) + 1)
+    for p in st["players"]:
+        expired = substances.tick_effects(p)
+        if expired:
+            notes.append(f"Эффекты завершились у {p['name']}: {', '.join(expired)}")
+            st.setdefault("flags", []).append(f"effect_expired:{','.join(expired)}")
+    return notes
+
+
+ACCEPT_WORDS = ("беру", "согласен", "согласна", "принимаю", "подписываю", "по рукам", "deal")
+
+
+def assemble_narration(mech, actor_name, flavor, extra=None):
+    """Исходы всегда из механики; художественный текст — только из flavor-слотов."""
+    lines = []
+    at = mech.get("action_type")
+    if mech.get("no_roll"):
+        lines.append(f"{actor_name}: {flavor['action']}. Действие не требует броска.")
+    elif at in ("attack_ranged", "attack_melee"):
+        lines.append(f"{actor_name}: {flavor['action']}.")
+        if flavor["hit"]:
+            lines.append(flavor["hit"])
+        lines += _attack_outcome_lines(mech)
+        second = mech.get("second")
+        if isinstance(second, dict) and second.get("action_type") in ("attack_ranged", "attack_melee"):
+            lines += _attack_outcome_lines(second)
+    else:
+        lines.append(f"{actor_name}: {flavor['action']}.")
+        lines.append(f"Проверка {mech.get('stat_key')}+{mech.get('skill')}: "
+                     f"{mech.get('total')} против DV{mech.get('dv')} — "
+                     f"{'УСПЕХ' if mech.get('success') else 'ПРОВАЛ'}.")
+        if flavor["hit"]:
+            lines.append(flavor["hit"])
+
+    for x in (extra or []):
+        lines.append(x)
+
+    r = mech.get("npc_reaction")
+    if r:
+        shots = r.get("shots", [])
+        for i, s in enumerate(shots):
+            fl = flavor["shots"][i] if i < len(flavor["shots"]) else "трассер режет дым над стойкой"
+            if s["success"]:
+                net = s.get("net_damage", 0)
+                if net > 0:
+                    out = (f"пуля попадает в {r.get('target_player')}: урон {s.get('damage', 0)} - "
+                           f"SP{s.get('armor_sp', 0)} = {net}, HP игрока {s.get('player_hp', '?')}.")
+                else:
+                    out = (f"пуля попадает в {r.get('target_player')}, но броня SP{s.get('armor_sp', 0)} "
+                           f"поглощает весь урон {s.get('damage', 0)}: раны нет.")
+            else:
+                out = f"выстрел в {r.get('target_player')} проходит мимо."
+            lines.append(f"{s['npc']}: {fl}. {out}")
+        p = r.get("principal")
+        if p:
+            lines.append(f"{p['npc']}: {flavor['principal']}. {p['text']}.")
+    return "\n".join(lines)
+
+
+ACCEPT_WORDS = ("беру", "согласен", "согласна", "принимаю", "подписываю", "по рукам", "deal")
+
+
+def apply_world_ticks(st, mech):
+    """Детерминированные тики мира: heat и длительности эффектов."""
+    notes = []
+    at = mech.get("action_type")
+    if at in ("attack_ranged", "attack_melee", "ram"):
+        st["heat"] = min(10, st.get("heat", 0) + 1)
+    elif at in ("hack", "skill") and not mech.get("no_roll") and not mech.get("success"):
+        st["heat"] = min(10, st.get("heat", 0) + 1)
+    for p in st["players"]:
+        expired = substances.tick_effects(p)
+        if expired:
+            notes.append(f"Эффекты завершились у {p['name']}: {', '.join(expired)}")
+            st.setdefault("flags", []).append(f"effect_expired:{','.join(expired)}")
+    return notes
+
+
+def handover_contract(st):
+    """Фиксер выполняет свою цель: передаёт контракт и аванс. Идемпотентно."""
+    if st.get("contract_given"):
+        return []
+    st["contract_given"] = True
+    remaining = [b for b in CONTRACT_BEATS if b not in st["revealed_beats"]]
+    st["revealed_beats"] = list(CONTRACT_BEATS)
+    advance = (st.get("contract") or {}).get("advance") or 500
+    for p in st["players"]:
+        p["eb"] = p.get("eb", 0) + advance
+    st.setdefault("granted", []).append("дата-планшет с контрактом")
+    lines = ["Кесслер двигает по столу дата-планшет: «Контракт ваш. Аванс на счетах, детали внутри.»"]
+    lines += [f"— {b}" for b in remaining]
+    lines.append(f"Аванс {advance} eb каждому игроку. Планшет контракта у партии.")
+    return lines
+
 
 def _act_core(sid: str, req: ActionIn):
     st = get_state(sid)
@@ -763,16 +880,25 @@ def _act_core(sid: str, req: ActionIn):
             st["threat"] = m["target_id"]
 
     info_kw = ("контракт", "детал", "цель", "информац", "чертеж", "план", "узна",
-               "расскаж", "что нужно", "задан", "вопрос")
+               "расскаж", "что нужно", "задан", "вопрос", "сколько плат")
     is_info = (mech.get("action_type") in ("social", "hack", "skill")
                and not mech.get("no_roll")
                and any(k in req.text.lower() for k in info_kw))
+    just_revealed = None
     if is_info and mech.get("success"):
         remaining = [b for b in CONTRACT_BEATS if b not in st["revealed_beats"]]
         if remaining:
-            st["revealed_beats"].append(remaining[0])
+            just_revealed = remaining[0]
+            st["revealed_beats"].append(just_revealed)
 
-    # === АКТЫ И ПЕРЕХОДЫ ===
+    extra = []
+    if just_revealed:
+        extra.append(f"Кесслер раскрывает деталь контракта: {just_revealed}")
+
+    clean_text = re.sub(r"\*[^*]*\*", " ", req.text).lower()
+    if st.get("act", "fixer") == "fixer" and any(w in clean_text for w in ACCEPT_WORDS):
+        extra += handover_contract(st)
+
     act_type = st.get("act", "fixer")
     do_transition = False
     departure_question = False
@@ -801,6 +927,7 @@ def _act_core(sid: str, req: ActionIn):
             departure_question = True
 
         if do_transition:
+            handover_lines = handover_contract(st)
             scenario.advance_act(st)
             st["act"] = "recon"
             st["recon_slots"] = 3
@@ -808,10 +935,9 @@ def _act_core(sid: str, req: ActionIn):
             st["scenario"]["scene"] = ACT2_SCENE
             transition_narr = (
                 ("Кесслер нетерпеливо машет рукой: 'Хватит болтать, время идёт. Идите и сделайте свою работу.' "
-                 "Он забирает планшет и уходит, не оглядываясь."
                  if kessler_tired else
-                 "Вы поднимаетесь из-за стола. Кесслер кивает на прощание: 'Удачи. Не подведите.' "
-                 "Он сворачивает планшет и уходит вглубь бара.")
+                 "Вы поднимаетесь из-за стола. Кесслер кивает на прощание: 'Удачи. Не подведите.' ")
+                + ("\n" + "\n".join(handover_lines) if handover_lines else "")
                 + "\n\n[ПЕРЕХОД К АКТУ 2: РЕКОГНОСЦИРОВКА]\n\n" + ACT2_SCENE)
             st["log"].append({"player": "GM", "text": "[переход]", "mech": {}, "narration": transition_narr})
             turn_no = len(st["log"]) - 1
@@ -832,6 +958,7 @@ def _act_core(sid: str, req: ActionIn):
             if mech.get("success"):
                 st.setdefault("assets", []).append(
                     {"skill": judge.get("skill"), "note": req.text[:60]})
+                extra.append(f"Разведданные закреплены: {req.text[:60]}")
         if st.get("recon_slots", 0) <= 0:
             scenario.advance_act(st)
             st["act"] = "infiltration"
@@ -851,7 +978,25 @@ def _act_core(sid: str, req: ActionIn):
                     st.setdefault("flags", []).append("alarm")
                     act_notice += " ОБЪЕКТ ПОЛНОСТЬЮ ЗАБЛОКИРОВАН."
 
-    # === НАРРАЦИЯ: исходы из механики, художественность из flavor-слотов ===
+    extra += apply_world_ticks(st, mech)
+
+    if mech.get("hack_result") == "entered":
+        extra.append(f"НЕТРАННИНГ: {actor['name']} входит в сеть '{mech.get('architecture')}', "
+                     f"этаж {mech.get('floor')}/{mech.get('max_floors')}, DV {mech.get('dv')}.")
+    elif mech.get("hack_result") == "no_interface":
+        extra.append(f"{actor['name']} тянется к порту, но Interface Plugs нет: вход в сеть невозможен.")
+    elif mech.get("hack_result") in ("failed", "failed_check"):
+        extra.append(f"Вход в сеть не удался: {mech.get('reason', 'проверка провалена')}.")
+
+    from backend import vehicles as veh_mod
+    tl = [f"{p['name']} в транспорте {(veh_mod.get_vehicle(p['vehicle']) or {}).get('name', p['vehicle'])}"
+          for p in st["players"] if p.get("vehicle")]
+    ch = st.get("chase")
+    if ch and ch.get("status") == "active":
+        tl.append(f"ПОГОНЯ: дистанция {ch['range']} ({ch.get('range_name', '')}), раунд {ch['rounds']}")
+    if tl:
+        extra.append("ТРАНСПОРТ: " + "; ".join(tl))
+
     actor_name = actor["name"]
     shots_n = len((mech.get("npc_reaction") or {}).get("shots", []))
     prev_short = (st["log"][-1]["narration"][:160] if st["log"] else "")
@@ -864,7 +1009,7 @@ def _act_core(sid: str, req: ActionIn):
             f"{'без броска' if mech.get('no_roll') else ('успех' if mech.get('success') else 'провал')}\n"
             f"Выстрелов NPC: {shots_n}\nВерни JSON flavor."}
     ], model=globals().get("NARR_MODEL", JUDGE_MODEL), temperature=0.7)
-    narration = assemble_narration(mech, actor_name, sanitize_flavor(flavor_raw, shots_n))
+    narration = assemble_narration(mech, actor_name, sanitize_flavor(flavor_raw, shots_n), extra=extra)
 
     if departure_question:
         narration += ("\n\nКесслер смотрит выжидающе: "
@@ -872,7 +1017,6 @@ def _act_core(sid: str, req: ActionIn):
     if act_notice:
         narration += "\n\n" + act_notice
 
-    # === ЛОГ, ХОД, СПАСБРОСКИ ===
     st["log"].append({"player": actor_name, "text": req.text, "mech": mech, "narration": narration})
     turn_no = len(st["log"]) - 1
     turn_id = db.log_turn(sid, turn_no, actor_name, req.text, mech, {}, narration)
@@ -899,202 +1043,6 @@ def _act_core(sid: str, req: ActionIn):
         "next_player": st["order"][st["turn"]],
         "state": public_state(st),
     }
- 
-   # Контекст нетраннинга
-    net_context = ""
-    if mech.get("hack_result") == "entered":
-        net_context = (f"\nНЕТРАННИНГ: {actor_name} вошёл в сеть '{mech.get('architecture')}'. "
-                      f"Этаж {mech.get('floor')}/{mech.get('max_floors')}, DV {mech.get('dv')}.") 
-                      
-
-    # Тик активных эффектов наркотиков
-    for p in st["players"]:
-        expired = substances.tick_effects(p)
-        if expired:
-            st["flags"].append(f"effect_expired:{','.join(expired)}") 
-
-    # Контекст транспорта и погони
-    from backend import vehicles as veh_mod
-    transport_lines = []
-    for p in st["players"]:
-        if p.get("vehicle"):
-            v = veh_mod.get_vehicle(p["vehicle"])
-            transport_lines.append(f"- {p['name']}: в транспорте {(v or {}).get('name', p['vehicle'])}")
-    chase = st.get("chase")
-    chase_line = ""
-    if chase and chase.get("status") == "active":
-        chase_line = (f"\nПОГОНЯ: дистанция {chase['range']} ({chase.get('range_name', '')}), "
-                      f"раунд {chase['rounds']}")
-    transport_ctx = ""
-    if transport_lines or chase_line:
-        transport_ctx = "\nТРАНСПОРТ В СЦЕНЕ:\n" + "\n".join(transport_lines) + chase_line + "\n"
-
-    # Явный флаг: успех, но броня поглотила
-    success_but_blocked = (
-        mech.get("success") 
-        and mech.get("net_damage", 0) == 0 
-        and mech.get("damage", 0) > 0
-    )
-
-    user_msg = (
-        f"ДЕЙСТВУЕТ: {actor_name}\n"
-        f"ИГРОКИ В СЦЕНЕ: {players_names}\n"
-        f"ИМЕНА: используй ТОЛЬКО имена из блоков ДЕЙСТВУЕТ, ИГРОКИ В СЦЕНЕ и NPC В СЦЕНЕ. "
-        f"ЗАПРЕЩЕНО подставлять любые другие имена (Вектор, Никс и т.п.). "
-        f"Если имя — число или нестандартное слово, пиши его БЕЗ склонения.\n"
-        f"СЦЕНА: {scene}\n{act_ctx}\n"
-        f"NPC В СЦЕНЕ:\n{npc_block}\n"
-        + transport_ctx
-        + f"Heat: {st['heat']}, флаги: {st['flags']}\n"        
-        f"Heat: {st['heat']}, флаги: {st['flags']}\n"
-        f"ПЕРСОНАЖ ИГРОКА: {actor_name} ({actor['role']})\n"
-        f"ЗАЯВЛЕНОЕ ДЕЙСТВИЕ: {req.text}\n"
-        f"СМЫСЛ ДЕЙСТВИЯ: {ACTION_LABEL.get(mech.get('action_type'), 'действие')}\n"
-        f"ФАКТЫ БРОСКА: {facts}\nРЕЗУЛЬТАТ: {outcome}\n"
-        f"ПОСЛЕДСТВИЯ (обязательно соблюдать):\n{cons}\n"
-        + (f"ВОПРОС-ПОДТВЕРЖДЕНИЕ: игрок заявил уход из бара, но ещё НЕ подтвердил его. "
-           f"В конце нарратива ОБЯЗАТЕЛЬНО задай вопрос: 'Уверены, что уходите? Контракт останется невыполненным.' "
-           f"НЕ описывай сам уход и НЕ покидай бар в этом ходе.\n" if departure_question else "")        
-        + (f"ВНИМАНИЕ: УСПЕХ, но броня поглотила весь урон. Цель НЕ ранена, но удар пришёлся. НЕ пиши 'уворачивается'.\n" if success_but_blocked else "")        
-        + (f"РАСКРОЙ ФАКТ СЕЙЧАС (обязательно вплести в реплику NPC конкретно):\n- {just_revealed}\n" if just_revealed else "")
-        + (f"УЖЕ РАСКРЫТО РАНЬШЕ (не повторяй без вопроса):\n" + "\n".join("- " + b for b in st["revealed_beats"][:-1]) + "\n" if len(st["revealed_beats"]) > 1 else "")
-        + (f"ФИЗИЧЕСКИ ВЫДАНО ИГРОКУ (на руках, учитывай в сценах):\n" + "\n".join("- " + g for g in st["granted"]) + "\n" if st.get("granted") else "")
-        + (f"ПРЕДЫДУЩИЕ ХОДЫ:\n{prev}\n" if prev else "")
-        + f"ПРАВИЛА (справочно):\n{ctx}\nЛОР (только названия и детали):\n{fctx}"
-        + net_context
-        + f"ПРАВИЛА (справочно):\n{ctx}\nЛОР (только названия и детали):\n{fctx}"
-    )        
-
-    narr_sys = NARR_SYS_UNIVERSAL
-
-    reply = chat_json([
-        {"role": "system", "content": NARR_HARD_RULES + "\n" + NARR_SYS_UNIVERSAL},
-        {"role": "user", "content": user_msg}
-    ], model=NARR_MODEL, temperature=0.6)
-
-    raw_n = reply.get("narration", "")
-    hallucination_keywords = ["новый сент-джеймс", "клан королевских", "покровительств"]
-    you_patterns = [
-        " ты ", "твой ", "твоя ", "твоё ", "твои ", "тебя ", "тебе ",
-        " тобой", " твой ", " твоя ", " твоё ", " твои ",
-        " вашего", " вашим", " ваша", " ваше"
-    ]
-    has_hallucination = any(kw in raw_n.lower() for kw in hallucination_keywords)
-    has_you = any(p in raw_n.lower() for p in you_patterns)
-    leaked = leaked_example_names(raw_n, st)
-    has_cjk = bool(CJK.search(raw_n))
-    too_short = len(clean(raw_n)) < 40
-
-    if has_you or has_hallucination or leaked or has_cjk or too_short:
-        retry_sys = narr_sys + (
-            "\n\n**ВТОРАЯ ПОПЫТКА. ПРЕДЫДУЩИЙ ОТВЕТ НАРУШАЛ ПРАВИЛА: "
-            "обращение на «ты», выдуманные локации/фракции, чужие имена или слишком короткий текст. "
-            "Пиши ТОЛЬКО в третьем лице. Используй ТОЛЬКО имена из блоков ДЕЙСТВУЕТ, "
-            "ИГРОКИ В СЦЕНЕ и NPC В СЦЕНЕ. Используй ТОЛЬКО факты из контекста.**"
-        )
-        reply = chat_json([
-            {"role": "system", "content": retry_sys},
-            {"role": "user", "content": user_msg}
-        ], model=NARR_MODEL, temperature=0.4)
-        raw_n = reply.get("narration", "")
-        leaked = leaked_example_names(raw_n, st)
-
-    if leaked:
-        for bad in leaked:
-            raw_n = re.sub(rf"\b{bad}\w*", actor_name, raw_n, flags=re.IGNORECASE)
-        reply["narration"] = raw_n
-
-    sug = clamp_suggestions(reply.get("safe_state_suggestions"), st)
-    st["heat"] = max(0, min(10, st["heat"] + sug["heat_delta"]))
-    st["flags"] += sug["add_flags"]
-    for cname, inc in sug["clock_progress"].items():
-        if cname in st["clocks"]:
-            st["clocks"][cname]["progress"] = min(
-                st["clocks"][cname]["max"], st["clocks"][cname]["progress"] + inc)
-    if sug["npc_action"]:
-        st["flags"].append(sug["npc_action"])
-    st["granted"] = st.get("granted", []) + [g for g in sug["grant_items"]
-                                             if g not in st.get("granted", [])]
-
-    act_type = st.get("act", "fixer")
-    do_transition = False
-    departure_question = False
-
-    act_type = st.get("act", "fixer")
-    do_transition = False
-    departure_question = False
-
-    if act_type == "fixer":
-        leave, yes, no = detect_departure_intent(req.text)
-
-        recent_logs = st["log"][-4:]
-        fail_count = sum(1 for lg in recent_logs if lg.get("mech", {}).get("success") is False)
-        patience_low = st.get("patience", 4) <= 0
-        kessler_tired = fail_count >= 3 or patience_low
-
-        if st.get("pending_departure"):
-            if no:
-                st["pending_departure"] = False
-            elif yes or leave:
-                st["pending_departure"] = False
-                do_transition = True
-        elif kessler_tired:
-            do_transition = True
-        elif leave:
-            st["pending_departure"] = True
-            departure_question = True
-
-        if do_transition:
-            scenario.advance_act(st)
-            st["act"] = "recon"
-            st["recon_slots"] = 3
-            st["assets"] = []
-            st["scenario"]["scene"] = ACT2_SCENE
-
-            if kessler_tired and not st.get("pending_departure"):
-                transition_narr = ("Кесслер нетерпеливо машет рукой: 'Хватит болтать, время идёт. "
-                                   "Идите и сделайте свою работу.' Он забирает планшет и уходит, "
-                                   "не оглядываясь.\n\n[ПЕРЕХОД К АКТУ 2: РЕКОГНОСЦИРОВКА]\n\n"
-                                   + ACT2_SCENE)
-            else:
-                transition_narr = ("Вы поднимаетесь из-за стола. Кесслер кивает на прощание: "
-                                   "'Удачи. Не подведите.' Он сворачивает планшет и уходит вглубь бара.\n\n"
-                                   "[ПЕРЕХОД К АКТУ 2: РЕКОГНОСЦИРОВКА]\n\n"
-                                   + ACT2_SCENE)
-
-            st["log"].append({"player": "GM", "text": "[переход]", "mech": {}, "narration": transition_narr})
-            turn_no = len(st["log"]) - 1
-            turn_id = db.log_turn(sid, turn_no, "GM", "[переход]", {}, {}, transition_narr)
-
-            return {
-                "mechanics": {"action_type": "free", "no_roll": True},
-                "narration": transition_narr,
-                "questions": ["Что вы делаете для рекогносцировки?"],
-                "choices": ["Осмотреть территорию (perception)", "Вычислить патрули (deduction)", "Найти контакт внутри (streetwise)"],
-                "turn_no": turn_no,
-                "turn_id": turn_id,
-                "next_player": st["order"][0],
-                "state": public_state(st),
-            }
-
-    narration = clean(reply.get("narration", ""))
-    questions = [clean(q) for q in reply.get("questions", []) if clean(q)]
-    choices = [clean(c) for c in reply.get("choices", []) if clean(c)]
-
-    st["log"].append({"player": req.player, "text": req.text, "mech": mech,
-                      "narration": narration})
-    turn_no = len(st["log"]) - 1
-    turn_id = db.log_turn(sid, turn_no, req.player, req.text, judge, mech, narration)
-    st["turn"] = (st["turn"] + 1) % len(st["order"])
-
-    for p in st["players"]:
-        if p.get("wound") == "mortally" and not p.get("dead"):
-            p["death_save"] = engine.death_save(p)
-
-    return {"mechanics": mech, "assist": assist, "narration": narration,
-            "questions": questions, "choices": choices,
-            "turn_no": turn_no, "turn_id": turn_id,
-            "next_player": st["order"][st["turn"]], "state": st}
 
 
 @app.post("/session/{sid}/turn/{tid}/rate")
