@@ -397,21 +397,26 @@ def setup_page():
 
 @app.post("/chargen")
 def chargen_endpoint(req: ChargenIn):
-    if req.mode == "manual":
-        ch, problems = chargen.manual_character(req.manual or {})
-        if problems:
-            raise HTTPException(400, detail=problems)
-        role = ch.get("role")
-        if role in chargen.ROLES:
-            rd = chargen.ROLES[role]
-            ch.setdefault("cyberware", rd["starting_cyberware"])
-            ch.setdefault("eb", chargen.STARTING_EB[role])
-            ch.setdefault("weapon", rd["weapon"])
-            ch.setdefault("armor", rd["armor"])
-            ch.setdefault("gear", rd["items"])
-            ch.setdefault("ability", rd["ability"])
-        return ch
-    return chargen.random_character(role=req.role, seed=req.seed)
+    from backend import creation
+    try:
+        return creation.random_character(req.role)
+    except Exception as e:
+        raise HTTPException(400, f"chargen: {e}")
+
+
+@app.get("/creation/options")
+def creation_options(role: str = None):
+    from backend import creation
+    return creation.options(role)
+
+
+@app.post("/creation/build")
+def creation_build(spec: dict):
+    from backend import creation
+    try:
+        return creation.build(spec)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
 
 @app.post("/chargen/validate")
@@ -799,6 +804,42 @@ def assemble_narration(mech, actor_name, flavor, extra=None):
         if p:
             lines.append(f"{p['npc']}: {flavor['principal']}. {p['text']}.")
     return "\n".join(lines)
+
+
+ACCEPT_WORDS = ("беру", "согласен", "согласна", "принимаю", "подписываю", "по рукам", "deal")
+
+
+def apply_world_ticks(st, mech):
+    """Детерминированные тики мира: heat и длительности эффектов."""
+    notes = []
+    at = mech.get("action_type")
+    if at in ("attack_ranged", "attack_melee", "ram"):
+        st["heat"] = min(10, st.get("heat", 0) + 1)
+    elif at in ("hack", "skill") and not mech.get("no_roll") and not mech.get("success"):
+        st["heat"] = min(10, st.get("heat", 0) + 1)
+    for p in st["players"]:
+        expired = substances.tick_effects(p)
+        if expired:
+            notes.append(f"Эффекты завершились у {p['name']}: {', '.join(expired)}")
+            st.setdefault("flags", []).append(f"effect_expired:{','.join(expired)}")
+    return notes
+
+
+def handover_contract(st):
+    """Фиксер выполняет свою цель: передаёт контракт и аванс. Идемпотентно."""
+    if st.get("contract_given"):
+        return []
+    st["contract_given"] = True
+    remaining = [b for b in CONTRACT_BEATS if b not in st["revealed_beats"]]
+    st["revealed_beats"] = list(CONTRACT_BEATS)
+    advance = (st.get("contract") or {}).get("advance") or 500
+    for p in st["players"]:
+        p["eb"] = p.get("eb", 0) + advance
+    st.setdefault("granted", []).append("дата-планшет с контрактом")
+    lines = ["Кесслер двигает по столу дата-планшет: «Контракт ваш. Аванс на счетах, детали внутри.»"]
+    lines += [f"— {b}" for b in remaining]
+    lines.append(f"Аванс {advance} eb каждому игроку. Планшет контракта у партии.")
+    return lines
 
 
 ACCEPT_WORDS = ("беру", "согласен", "согласна", "принимаю", "подписываю", "по рукам", "deal")

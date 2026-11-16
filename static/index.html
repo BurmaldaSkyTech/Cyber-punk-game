@@ -99,21 +99,32 @@
       <div class="lobby-box hidden" id="charselect-box">
         <h2>Персонаж для: <span id="cs-name" style="color:#ffd700"></span></h2>
         <div class="row">
-          <select id="cs-role" style="margin-bottom:0">
-            <option value="">🎲 Случайная роль</option>
-            <option value="Solo">Solo</option>
-            <option value="Netrunner">Netrunner</option>
-            <option value="Techie">Techie</option>
-            <option value="Rockerboy">Rockerboy</option>
-            <option value="Fixer">Fixer</option>
-            <option value="Nomad">Nomad</option>
-            <option value="Medtech">Medtech</option>
-            <option value="Lawman">Lawman</option>
-            <option value="Exec">Exec</option>
-            <option value="Media">Media</option>
-          </select>
-          <button class="secondary" onclick="rollChar()">🎲 Сгенерировать</button>
+          <button class="secondary" id="tab-quick" onclick="csTab('quick')">🎲 Быстрый</button>
+          <button class="secondary" id="tab-full" onclick="csTab('full')">🛠 Полный билдер</button>
         </div>
+
+        <div id="cs-quick">
+          <div class="row">
+            <select id="cs-role" style="margin-bottom:0"></select>
+            <button class="secondary" onclick="rollChar()">🎲 Сгенерировать</button>
+          </div>
+        </div>
+
+        <div id="cs-full" class="hidden">
+          <div class="row"><select id="cb-role" onchange="cbLoad()"></select></div>
+          <div class="panel-section">Статы (пул <span id="cb-stat-pool"></span>)</div>
+          <div id="cb-stats" class="panel-small"></div>
+          <div class="panel-section">Навыки (пул <span id="cb-skill-pool"></span>)</div>
+          <div id="cb-skills" class="panel-small"></div>
+          <div class="panel-section">Оружие / Броня</div>
+          <div class="row"><select id="cb-weapon"></select><select id="cb-armor"></select></div>
+          <div class="panel-section">Снаряжение (до <span id="cb-gear-limit"></span>)</div>
+          <div id="cb-gear" class="panel-small"></div>
+          <div class="panel-section">Программы (до <span id="cb-prog-limit"></span>)</div>
+          <div id="cb-programs" class="panel-small"></div>
+          <div class="row"><button onclick="cbBuild()">Собрать персонажа</button></div>
+        </div>
+
         <div id="cs-preview" class="panel-small" style="margin:12px 0;background:#1a1a25;padding:12px;border-radius:6px;border:1px solid #333"></div>
         <div class="row">
           <button onclick="confirmChar()">Подтвердить и войти ▶</button>
@@ -225,6 +236,23 @@ async function startLocal(count) {
 function createRoom(solo) { openCharSelect(solo ? 'solo' : 'create'); }
 function joinRoom() { openCharSelect('join'); }
 
+let CB = null;
+
+function csTab(t) {
+  document.getElementById('cs-quick').classList.toggle('hidden', t !== 'quick');
+  document.getElementById('cs-full').classList.toggle('hidden', t !== 'full');
+  if (t === 'full' && !CB) cbLoad();
+}
+
+async function fillRoleSelects() {
+  const o = await (await fetch('/creation/options')).json();
+  for (const id of ['cs-role', 'cb-role']) {
+    const sel = document.getElementById(id);
+    sel.innerHTML = '<option value="">🎲 Случайная роль</option>' +
+      o.roles.map(r => `<option value="${r}">${r}</option>`).join('');
+  }
+}
+
 function openCharSelect(modeSel) {
   const name = (modeSel === 'join')
     ? document.getElementById('join-name').value.trim()
@@ -238,6 +266,8 @@ function openCharSelect(modeSel) {
   pendingMode = modeSel;
   document.getElementById('cs-name').textContent = name;
   document.getElementById('charselect-box').classList.remove('hidden');
+  fillRoleSelects();
+  csTab('quick');
   rollChar();
 }
 
@@ -245,7 +275,86 @@ async function rollChar() {
   const role = document.getElementById('cs-role').value || null;
   const r = await fetch('/chargen', {method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify(role ? {role: role} : {})});
-  if (!r.ok) { alert('Ошибка генерации персонажа'); return; }
+  if (!r.ok) { const e = await r.json().catch(()=>({})); alert(e.detail || 'Ошибка генерации'); return; }
+  pendingChar = await r.json();
+  renderCharPreview();
+}
+
+async function cbLoad() {
+  const role = document.getElementById('cb-role').value || null;
+  CB = await (await fetch('/creation/options' + (role ? '?role=' + role : ''))).json();
+  CB.spec = {
+    role: CB.role,
+    stats: Object.assign({}, CB.preset.stats),
+    skills: Object.assign({}, CB.preset.skills),
+    gear: CB.preset.gear.slice(), weapon: CB.preset.weapon,
+    armor: CB.preset.armor, programs: CB.preset.programs.slice(),
+  };
+  document.getElementById('cb-weapon').innerHTML = CB.weapons.map(w => `<option ${w===CB.spec.weapon?'selected':''}>${w}</option>`).join('');
+  document.getElementById('cb-armor').innerHTML = CB.armors.map(a => `<option ${a===CB.spec.armor?'selected':''}>${a}</option>`).join('');
+  document.getElementById('cb-gear-limit').textContent = CB.gear_limit;
+  document.getElementById('cb-prog-limit').textContent = CB.prog_limit;
+  cbRender();
+}
+
+function cbRender() {
+  const s = CB.spec;
+  const statUsed = Object.values(s.stats).reduce((a,b)=>a+b,0);
+  document.getElementById('cb-stat-pool').textContent = (CB.stat_pool - statUsed);
+  document.getElementById('cb-stats').innerHTML = CB.stats.map(k =>
+    `<span class="stat-chip"><b>${k}</b> ${s.stats[k]}
+      <button class="secondary" style="padding:0 6px" onclick="cbStat('${k}',-1)">−</button>
+      <button class="secondary" style="padding:0 6px" onclick="cbStat('${k}',1)">+</button></span>`).join('');
+  const skUsed = Object.values(s.skills).reduce((a,b)=>a+b,0);
+  document.getElementById('cb-skill-pool').textContent = (CB.skill_pool - skUsed);
+  document.getElementById('cb-skills').innerHTML = CB.skills.map(k =>
+    `<span class="stat-chip"><b>${k}</b> ${s.skills[k]||0}
+      <button class="secondary" style="padding:0 6px" onclick="cbSkill('${k}',-1)">−</button>
+      <button class="secondary" style="padding:0 6px" onclick="cbSkill('${k}',1)">+</button></span>`).join('');
+  document.getElementById('cb-gear').innerHTML = CB.gear.map(g =>
+    `<label style="display:inline-block;margin:2px 6px"><input type="checkbox" style="width:auto"
+      ${s.gear.includes(g)?'checked':''} onchange="cbGear('${g}',this.checked)"> ${g}</label>`).join('');
+  document.getElementById('cb-programs').innerHTML = CB.programs.map(p =>
+    `<label style="display:inline-block;margin:2px 6px"><input type="checkbox" style="width:auto"
+      ${s.programs.includes(p)?'checked':''} onchange="cbProg('${p}',this.checked)"> ${p}</label>`).join('');
+}
+
+function cbStat(k, d) {
+  const s = CB.spec.stats;
+  const used = Object.values(s).reduce((a,b)=>a+b,0);
+  const nv = s[k] + d;
+  if (nv < CB.stat_min || nv > CB.stat_max) return;
+  if (d > 0 && used >= CB.stat_pool) return;
+  s[k] = nv; cbRender();
+}
+function cbSkill(k, d) {
+  const s = CB.spec.skills;
+  const used = Object.values(s).reduce((a,b)=>a+b,0);
+  const nv = (s[k]||0) + d;
+  if (nv < 0 || nv > CB.skill_max) return;
+  if (d > 0 && used >= CB.skill_pool) return;
+  s[k] = nv; cbRender();
+}
+function cbGear(g, on) {
+  const s = CB.spec.gear;
+  if (on && !s.includes(g) && s.length < CB.gear_limit) s.push(g);
+  if (!on) CB.spec.gear = s.filter(x => x !== g);
+  cbRender();
+}
+function cbProg(p, on) {
+  const s = CB.spec.programs;
+  if (on && !s.includes(p) && s.length < CB.prog_limit) s.push(p);
+  if (!on) CB.spec.programs = s.filter(x => x !== p);
+  cbRender();
+}
+
+async function cbBuild() {
+  CB.spec.weapon = document.getElementById('cb-weapon').value;
+  CB.spec.armor = document.getElementById('cb-armor').value;
+  CB.spec.name = document.getElementById('cs-name').textContent;
+  const r = await fetch('/creation/build', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(CB.spec)});
+  if (!r.ok) { const e = await r.json().catch(()=>({})); alert(e.detail || 'Ошибка сборки'); return; }
   pendingChar = await r.json();
   renderCharPreview();
 }
@@ -260,16 +369,17 @@ function renderCharPreview() {
     <b>Статы:</b> ${stats}<br>
     <b>Навыки:</b> ${skills}<br>
     <b>Импланты:</b> ${(p.cyberware || []).join(', ') || '—'}<br>
-    <b>Снаряжение:</b> ${(p.inventory || []).join(', ') || '—'}`;
+    <b>Снаряжение:</b> ${(p.inventory || []).join(', ') || '—'}<br>
+    <b>Программы:</b> ${(p.programs || []).join(', ') || '—'}`;
 }
 
 function closeCharSelect() {
   document.getElementById('charselect-box').classList.add('hidden');
-  pendingMode = null; pendingChar = null; pendingCode = null;
+  pendingMode = null; pendingChar = null; pendingCode = null; CB = null;
 }
 
 async function confirmChar() {
-  if (!pendingChar) return alert('Сначала сгенерируйте персонажа');
+  if (!pendingChar) return alert('Сначала сгенерируйте или соберите персонажа');
   const name = document.getElementById('cs-name').textContent;
   const m = pendingMode, code = pendingCode, char = pendingChar;
   char.name = name;
@@ -370,6 +480,11 @@ function setWsDot(on) {
 
 function connectWS() {
   if (ws) { ws.onclose = null; try { ws.close(); } catch (e) {} }
+  if (e.code === 4003) {
+      localStorage.removeItem('tok_' + sid);
+      localStorage.removeItem('me_' + sid);
+      showErr('err', 'WS: токен устарел — выйдите в меню и войдите в комнату заново');
+    }  
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   const url = `${proto}//${location.host}/ws/${sid}?player=${encodeURIComponent(myName || '')}&token=${token || ''}`;
   ws = new WebSocket(url);
