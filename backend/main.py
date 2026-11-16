@@ -589,36 +589,47 @@ def detect_departure_intent(text):
 
 LOCATION_RU = {"head": "голова", "torso": "корпус", "limb": "конечность", "auto": "корпус"}
 
-NARR_FLAVOR_SYS = """Ты — соавтор наррации Cyberpunk RED. Верни ТОЛЬКО JSON с художественными описаниями БЕЗ исходов.
+NARR_FLAVOR_SYS = """Ты — соавтор наррации Cyberpunk RED. Верни ТОЛЬКО JSON с художественными описаниями БЕЗ исходов и БЕЗ новых предметов.
 Запрещено в любых полях: слова попал/попадает/промах/урон/поглот/брон/ранен/убит/умер/SP/кевлар/луч/лазер/плазма, любые цифры и DV.
+Запрещено вводить НОВЫЕ предметы, контейнеры, коробки, свертки, документы, чипы; NPC ничего не достаёт и не передаёт игроку.
 Поля:
-"action": 1-2 предложения описания действия игрока (жест, движение, звук, атмосфера), без исхода.
-"hit": 1 предложение ощущения/картинки момента контакта или промаха, без исхода и цифр.
-"shots": массив ровно по числу выстрелов NPC; каждый элемент — 1 предложение картинки выстрела (трассер, гильза, вспышка, укрытие), без исхода.
-"principal": 1 предложение поведения не-бойца (фиксер/гражданский) в момент опасности, без исхода.
-Стиль: нуар, неон, дым, конкретные детали. Имена не упоминай — их подставит сервер.
+"action": 1-2 предложения о ТОМ, ЧТО ДЕЛАЕТ ИГРОК (его жест, движение, звук, атмосфера вокруг него). НЕ описывай действия NPC здесь. НЕ упоминай имена (ни игрока, ни NPC).
+"hit": 1 предложение ощущения/картинки момента контакта или промаха, без исхода и цифр, без имён.
+"shots": массив ровно по числу выстрелов NPC; каждый — 1 предложение картинки выстрела (трассер, гильза, вспышка, укрытие), без исхода и имён.
+"principal": 1 предложение поведения не-бойца в момент опасности (укрытие, крик), без исхода, без имён, без передачи предметов.
+Не повторяй формулировки предыдущего хода.
+Стиль: нуар, неон, дым, конкретные детали.
 """
 
 _FLAVOR_FORBID = ("попал", "попадает", "промах", "урон", "поглот", "брон", "ранен",
                   "убит", "умер", "sp", "кевлар", "луч", "лазер", "плазм")
 
 
-def _clean_flavor(s, default):
+def _clean_flavor(s, default, block=()):
     s = (s or "").strip()
-    if not s or any(t in s.lower() for t in _FLAVOR_FORBID):
+    low = s.lower()
+    if not s or any(t in low for t in _FLAVOR_FORBID):
+        return default
+    if any(b and b.lower() in low for b in block):
         return default
     return s
 
 
-def sanitize_flavor(flavor, n_shots):
+def sanitize_flavor(flavor, n_shots, npc_names=(), actor_name="", declared=""):
     flavor = flavor if isinstance(flavor, dict) else {}
+    block_obj = ("коробочк", "коробк", "сверток", "пакет", "достаёт", "достает",
+                 "протягивает", "вручает", "передаёт", "передает", "кладёт", "кладет")
+    names = tuple(npc_names) + ((actor_name,) if actor_name else ())
     raw_shots = flavor.get("shots") or []
     return {
-        "action": _clean_flavor(flavor.get("action"), "движение резкое, без предупреждения"),
-        "hit": _clean_flavor(flavor.get("hit"), ""),
+        "action": _clean_flavor(flavor.get("action"), "выполняет заявленное действие",
+                                block=names + block_obj),
+        "hit": _clean_flavor(flavor.get("hit"), "", block=names + block_obj),
         "shots": [_clean_flavor(raw_shots[i] if i < len(raw_shots) else "",
-                                "трассер режет дым над стойкой") for i in range(n_shots)],
-        "principal": _clean_flavor(flavor.get("principal"), "вжимается в укрытие за столом"),
+                                "трассер режет дым над стойкой", block=names)
+                  for i in range(n_shots)],
+        "principal": _clean_flavor(flavor.get("principal"), "вжимается в укрытие за столом",
+                                   block=block_obj),
     }
 
 
@@ -999,7 +1010,7 @@ def _act_core(sid: str, req: ActionIn):
 
     actor_name = actor["name"]
     shots_n = len((mech.get("npc_reaction") or {}).get("shots", []))
-    prev_short = (st["log"][-1]["narration"][:160] if st["log"] else "")
+    prev_short = (st["log"][-1]["text"][:120] if st["log"] else "")
     flavor_raw = chat_json([
         {"role": "system", "content": NARR_FLAVOR_SYS},
         {"role": "user", "content":
@@ -1007,9 +1018,14 @@ def _act_core(sid: str, req: ActionIn):
             f"Предыдущий момент: {prev_short}\n"
             f"Тип: {mech.get('action_type')}, исход: "
             f"{'без броска' if mech.get('no_roll') else ('успех' if mech.get('success') else 'провал')}\n"
-            f"Выстрелов NPC: {shots_n}\nВерни JSON flavor."}
+            f"Выстрелов NPC: {shots_n}\n"
+            f"Запрещено вводить новые предметы и контейнеры; NPC ничего не передаёт.\n"
+            f"Верни JSON flavor."}
     ], model=globals().get("NARR_MODEL", JUDGE_MODEL), temperature=0.7)
-    narration = assemble_narration(mech, actor_name, sanitize_flavor(flavor_raw, shots_n), extra=extra)
+    narration = assemble_narration(mech, actor_name, sanitize_flavor(
+        flavor_raw, shots_n,
+        npc_names=[n["name"] for n in st["npcs"]],
+        actor_name=actor_name, declared=req.text), extra=extra)
 
     if departure_question:
         narration += ("\n\nКесслер смотрит выжидающе: "

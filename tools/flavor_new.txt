@@ -1,0 +1,38 @@
+# === CONST ===
+NARR_FLAVOR_SYS = """Ты — соавтор наррации Cyberpunk RED. Верни ТОЛЬКО JSON с художественными описаниями БЕЗ исходов и БЕЗ новых предметов.
+Запрещено в любых полях: слова попал/попадает/промах/урон/поглот/брон/ранен/убит/умер/SP/кевлар/луч/лазер/плазма, любые цифры и DV.
+Запрещено вводить НОВЫЕ предметы, контейнеры, коробки, свертки, документы, чипы; NPC ничего не достаёт и не передаёт игроку.
+Поля:
+"action": 1-2 предложения о ТОМ, ЧТО ДЕЛАЕТ ИГРОК (его жест, движение, звук, атмосфера вокруг него). НЕ описывай действия NPC здесь. НЕ упоминай имена (ни игрока, ни NPC).
+"hit": 1 предложение ощущения/картинки момента контакта или промаха, без исхода и цифр, без имён.
+"shots": массив ровно по числу выстрелов NPC; каждый — 1 предложение картинки выстрела (трассер, гильза, вспышка, укрытие), без исхода и имён.
+"principal": 1 предложение поведения не-бойца в момент опасности (укрытие, крик), без исхода, без имён, без передачи предметов.
+Не повторяй формулировки предыдущего хода.
+Стиль: нуар, неон, дым, конкретные детали.
+"""
+# === CLEAN ===
+def _clean_flavor(s, default, block=()):
+    s = (s or "").strip()
+    low = s.lower()
+    if not s or any(t in low for t in _FLAVOR_FORBID):
+        return default
+    if any(b and b.lower() in low for b in block):
+        return default
+    return s
+# === SANITIZE ===
+def sanitize_flavor(flavor, n_shots, npc_names=(), actor_name="", declared=""):
+    flavor = flavor if isinstance(flavor, dict) else {}
+    block_obj = ("коробочк", "коробк", "сверток", "пакет", "достаёт", "достает",
+                 "протягивает", "вручает", "передаёт", "передает", "кладёт", "кладет")
+    names = tuple(npc_names) + ((actor_name,) if actor_name else ())
+    raw_shots = flavor.get("shots") or []
+    return {
+        "action": _clean_flavor(flavor.get("action"), "выполняет заявленное действие",
+                                block=names + block_obj),
+        "hit": _clean_flavor(flavor.get("hit"), "", block=names + block_obj),
+        "shots": [_clean_flavor(raw_shots[i] if i < len(raw_shots) else "",
+                                "трассер режет дым над стойкой", block=names)
+                  for i in range(n_shots)],
+        "principal": _clean_flavor(flavor.get("principal"), "вжимается в укрытие за столом",
+                                   block=block_obj),
+    }
