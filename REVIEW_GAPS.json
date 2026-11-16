@@ -1,0 +1,343 @@
+{
+  "book": "Cyberpunk RED Core Rulebook",
+  "pass": 2,
+  "rules_status": {
+    "book": "Cyberpunk RED Core Rulebook",
+    "packs": {
+      "armor": {
+        "total": 1,
+        "verified": 1,
+        "unverified": 0
+      },
+      "combat": {
+        "total": 16,
+        "verified": 1,
+        "unverified": 15
+      },
+      "creation": {
+        "total": 14,
+        "verified": 6,
+        "unverified": 8
+      },
+      "cyberware": {
+        "total": 2,
+        "verified": 0,
+        "unverified": 2
+      },
+      "gear": {
+        "total": 2,
+        "verified": 0,
+        "unverified": 2
+      },
+      "netrunning": {
+        "total": 4,
+        "verified": 0,
+        "unverified": 4
+      },
+      "weapons": {
+        "total": 1,
+        "verified": 1,
+        "unverified": 0
+      }
+    },
+    "house_hits": {
+      "creation.stat_pool_edgerunner": 60
+    }
+  },
+  "gaps": [
+    {
+      "pack": "creation",
+      "key": "methods",
+      "current_value": null,
+      "note": "ожидает извлечения из книги",
+      "where_to_look": ""
+    },
+    {
+      "pack": "creation",
+      "key": "roles",
+      "current_value": null,
+      "note": "ожидает извлечения из книги",
+      "where_to_look": "Roles chapter, перечень ролей"
+    },
+    {
+      "pack": "creation",
+      "key": "stat_list",
+      "current_value": null,
+      "note": "ожидает извлечения из книги",
+      "where_to_look": "Character Creation, блок STAT"
+    },
+    {
+      "pack": "creation",
+      "key": "stat_pool_edgerunner",
+      "current_value": "template roll (no fixed pool; Complete Package uses 62)",
+      "note": "grok:high | ожидалось число; цитата не подтверждает значение; КОНФЛИКТ creation.limits.stat_pool=62; КОНФЛИКТ creation.HOUSE.stat_pool_edgerunner=template (no pool)",
+      "where_to_look": "Character Creation, методы Streetrat / Edgerunner / Complete Package"
+    },
+    {
+      "pack": "creation",
+      "key": "skill_list",
+      "current_value": null,
+      "note": "ожидает извлечения из книги",
+      "where_to_look": "Skills chapter, таблица навыков с привязкой к STAT"
+    },
+    {
+      "pack": "creation",
+      "key": "starting_eb",
+      "current_value": null,
+      "note": "ожидает извлечения из книги",
+      "where_to_look": "Character Creation / Gear, стартовые средства по методу и роли"
+    },
+    {
+      "pack": "creation",
+      "key": "gear_budget",
+      "current_value": null,
+      "note": "ожидает извлечения из книги",
+      "where_to_look": ""
+    },
+    {
+      "pack": "creation",
+      "key": "role_abilities",
+      "current_value": null,
+      "note": "ожидает извлечения из книги",
+      "where_to_look": ""
+    },
+    {
+      "pack": "combat",
+      "key": "range_dv",
+      "current_value": null,
+      "note": "ожидает извлечения из книги",
+      "where_to_look": "Combat, таблица DV по дистанциям для типов оружия"
+    },
+    {
+      "pack": "combat",
+      "key": "aimed_shot_penalties",
+      "current_value": null,
+      "note": "ожидает извлечения из книги",
+      "where_to_look": "Combat, Aimed Shot (голова / конечность)"
+    },
+    {
+      "pack": "combat",
+      "key": "aimed_shot_multipliers",
+      "current_value": null,
+      "note": "ожидает извлечения из книги",
+      "where_to_look": "Combat, урон при попадании в голову / конечность"
+    },
+    {
+      "pack": "combat",
+      "key": "armor_ablation",
+      "current_value": null,
+      "note": "ожидает извлечения из книги",
+      "where_to_look": "Armor / Combat, Ablation — на сколько падает SP и при каком условии"
+    },
+    {
+      "pack": "combat",
+      "key": "critical_injury_trigger",
+      "current_value": null,
+      "note": "ожидает извлечения из книги",
+      "where_to_look": "Combat, Critical Injury — сколько шестёрок на кубиках урона"
+    },
+    {
+      "pack": "combat",
+      "key": "critical_injury_bonus",
+      "current_value": null,
+      "note": "ожидает извлечения из книги",
+      "where_to_look": "Combat, бонусный урон при критической травме"
+    },
+    {
+      "pack": "combat",
+      "key": "critical_injury_table",
+      "current_value": null,
+      "note": "ожидает извлечения из книги",
+      "where_to_look": "Trauma Team / Critical Injury tables"
+    },
+    {
+      "pack": "combat",
+      "key": "wound_states",
+      "current_value": null,
+      "note": "ожидает извлечения из книги",
+      "where_to_look": "Combat, Wound States — пороги HP"
+    },
+    {
+      "pack": "combat",
+      "key": "wound_penalties",
+      "current_value": null,
+      "note": "ожидает извлечения из книги",
+      "where_to_look": "Combat, штрафы за Wound States"
+    },
+    {
+      "pack": "combat",
+      "key": "death_save_formula",
+      "current_value": null,
+      "note": "ожидает извлечения из книги",
+      "where_to_look": "Combat, Death Save"
+    },
+    {
+      "pack": "combat",
+      "key": "initiative_formula",
+      "current_value": null,
+      "note": "ожидает извлечения из книги",
+      "where_to_look": "Combat, Initiative / порядок хода"
+    },
+    {
+      "pack": "combat",
+      "key": "autofire_rules",
+      "current_value": null,
+      "note": "ожидает извлечения из книги",
+      "where_to_look": "Weapons / Combat, Autofire"
+    },
+    {
+      "pack": "combat",
+      "key": "rof_rules",
+      "current_value": null,
+      "note": "ожидает извлечения из книги",
+      "where_to_look": "Weapons, что означает ROF за действие"
+    },
+    {
+      "pack": "combat",
+      "key": "melee_opposed_by",
+      "current_value": null,
+      "note": "ожидает извлечения из книги",
+      "where_to_look": "Combat, Melee attack — чем защищается цель"
+    },
+    {
+      "pack": "combat",
+      "key": "ranged_defense",
+      "current_value": null,
+      "note": "ожидает извлечения из книги",
+      "where_to_look": "Combat, Ranged attack — DV или встречный бросок"
+    },
+    {
+      "pack": "cyberware",
+      "key": "table",
+      "current_value": null,
+      "note": "ожидает извлечения из книги",
+      "where_to_look": ""
+    },
+    {
+      "pack": "cyberware",
+      "key": "humanity_loss_rules",
+      "current_value": null,
+      "note": "ожидает извлечения из книги",
+      "where_to_look": "Cyberware, Humanity Loss"
+    },
+    {
+      "pack": "netrunning",
+      "key": "architectures",
+      "current_value": null,
+      "note": "ожидает извлечения из книги",
+      "where_to_look": "Netrunning, NET Architecture"
+    },
+    {
+      "pack": "netrunning",
+      "key": "program_list",
+      "current_value": null,
+      "note": "ожидает извлечения из книги",
+      "where_to_look": "Netrunning, Programs"
+    },
+    {
+      "pack": "netrunning",
+      "key": "interface_dv",
+      "current_value": null,
+      "note": "ожидает извлечения из книги",
+      "where_to_look": "Netrunning, Interface / вход в архитектуру"
+    },
+    {
+      "pack": "netrunning",
+      "key": "black_ice",
+      "current_value": null,
+      "note": "ожидает извлечения из книги",
+      "where_to_look": "Netrunning, Black ICE"
+    },
+    {
+      "pack": "gear",
+      "key": "table",
+      "current_value": null,
+      "note": "ожидает извлечения из книги",
+      "where_to_look": ""
+    },
+    {
+      "pack": "gear",
+      "key": "services",
+      "current_value": null,
+      "note": "ожидает извлечения из книги",
+      "where_to_look": ""
+    }
+  ],
+  "weapon_requests": [
+    {
+      "pack": "weapons",
+      "key": "table.grenade",
+      "code_value": {
+        "name": "Граната",
+        "damage": "6d6",
+        "category": "explosive"
+      },
+      "task": "Отдельная строка книги для этого оружия (damage, rof, mag, skill, conceal, price). НЕ приравнивать ручную гранату к гранатомёту."
+    },
+    {
+      "pack": "weapons",
+      "key": "table.flamethrower",
+      "code_value": {
+        "name": "Огнемёт",
+        "category": "heavy",
+        "skill": "heavy_weapons",
+        "damage": "4d6",
+        "rof": 1,
+        "conceal": "no",
+        "price": 500,
+        "notes": "Incendiary"
+      },
+      "task": "Отдельная строка книги для этого оружия (damage, rof, mag, skill, conceal, price). НЕ приравнивать ручную гранату к гранатомёту."
+    }
+  ],
+  "conflicts": [
+    {
+      "key": "creation.stat_pool_edgerunner",
+      "claims": [
+        {
+          "value": "template roll (no fixed pool)",
+          "page": 78
+        },
+        {
+          "value": 62,
+          "page": 79,
+          "quote": "Starting Character 62"
+        }
+      ],
+      "code_value": 60,
+      "resolution_needed": "Выписать отдельно для Streetrat / Edgerunner / Complete Package: пул STAT и пул Skill, числом или null. Без прозы.",
+      "extra_keys": [
+        "stat_pool_streetrat",
+        "stat_pool_complete_package",
+        "skill_pool_streetrat",
+        "skill_pool_complete_package"
+      ]
+    }
+  ],
+  "output_schema": {
+    "entries": [
+      {
+        "pack": "...",
+        "key": "...",
+        "value": "...",
+        "page": "<int>",
+        "quote": "<=200 символов, содержит значение>",
+        "confidence": "high|medium|low"
+      }
+    ],
+    "not_found": [
+      {
+        "pack": "...",
+        "key": "...",
+        "reason": "..."
+      }
+    ]
+  },
+  "hard_rules": [
+    "Только JSON, без прозы",
+    "page обязателен, quote дословная и содержит значение",
+    "Нет в книге — писать в not_found, не выдумывать",
+    "Числовые пулы — числами, не строками",
+    "Большие таблицы можно дробить на ключи с суффиксами, у каждого своя страница"
+  ]
+}
