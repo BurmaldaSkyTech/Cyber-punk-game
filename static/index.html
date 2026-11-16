@@ -8,7 +8,7 @@
   body { font-family: 'Segoe UI', sans-serif; background: #0a0a0f; color: #e0e0e5; margin: 0; padding: 20px; }
   .container { max-width: 1700px; margin: 0 auto; }
   h1 { color: #ff2a6d; text-shadow: 0 0 10px #ff2a6d; }
-  .lobby-screen { max-width: 640px; margin: 30px auto; }
+  .lobby-screen { max-width: 680px; margin: 30px auto; }
   .lobby-box { background: #12121a; border: 1px solid #333; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
   .lobby-box h2 { color: #05d9e8; margin-top: 0; }
   .lobby-input { width: 100%; padding: 12px; background: #1a1a25; color: #fff; border: 1px solid #444; border-radius: 4px; font-size: 1.1em; margin-bottom: 10px; box-sizing: border-box; }
@@ -36,7 +36,7 @@
   .entry.mech { border-left-color: #ff2a6d; font-family: monospace; font-size: 0.9em; }
   .entry.narr { border-left-color: #05d9e8; }
   .entry.rate { border-left-color: #ffd700; background: #1f1f15; }
-  .turnbar { background: #1a1a25; border: 1px solid #05d9e8; border-radius: 8px; padding: 10px 15px; margin-bottom: 10px; font-size: 1.1em; display: flex; gap: 15px; align-items: center; flex-wrap: wrap; }
+  .turnbar { background: #1a1a25; border: 1px solid #05d9e8; border-radius: 8px; padding: 10px 15px; margin-bottom: 10px; font-size: 1.05em; display: flex; gap: 15px; align-items: center; flex-wrap: wrap; }
   .turnbar b { color: #05d9e8; }
   .ws-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
   .ws-dot.on { background: #0f0; box-shadow: 0 0 6px #0f0; }
@@ -47,6 +47,7 @@
   button:disabled { background: #555; cursor: not-allowed; }
   button.secondary { background: #333; }
   button.secondary:hover { background: #555; }
+  button.mini { padding: 0 7px; font-size: 0.9em; }
   .row { display: flex; gap: 10px; margin-top: 10px; }
   .row input { flex: 1; }
   .rating { display: flex; gap: 5px; margin-top: 10px; }
@@ -54,6 +55,7 @@
   .star.active { color: #ffd700; }
   .err { color: #ff2a6d; margin-top: 8px; }
   .busy-note { color: #ffd700; font-size: 0.9em; margin-top: 6px; }
+  .book-note { color: #7fbf7f; font-size: 0.78em; margin: 4px 0; }
   .hidden { display: none; }
   @media (max-width: 1100px) {
     .game-layout { grid-template-columns: 1fr; }
@@ -111,17 +113,31 @@
         </div>
 
         <div id="cs-full" class="hidden">
+          <div class="row">
+            <select id="cb-method" onchange="cbLoad()">
+              <option value="complete_package">Complete Package — 62 STAT + 86 Skill</option>
+              <option value="edgerunner">Edgerunner — бросок STAT + 86 Skill</option>
+              <option value="streetrat">Streetrat — шаблон</option>
+            </select>
+          </div>
           <div class="row"><select id="cb-role" onchange="cbLoad()"></select></div>
+          <div id="cb-method-note" class="book-note"></div>
+
           <div class="panel-section">Статы (пул <span id="cb-stat-pool"></span>)</div>
           <div id="cb-stats" class="panel-small"></div>
+
           <div class="panel-section">Навыки (пул <span id="cb-skill-pool"></span>)</div>
           <div id="cb-skills" class="panel-small"></div>
+
           <div class="panel-section">Оружие / Броня</div>
           <div class="row"><select id="cb-weapon"></select><select id="cb-armor"></select></div>
+
           <div class="panel-section">Снаряжение (до <span id="cb-gear-limit"></span>)</div>
           <div id="cb-gear" class="panel-small"></div>
+
           <div class="panel-section">Программы (до <span id="cb-prog-limit"></span>)</div>
           <div id="cb-programs" class="panel-small"></div>
+
           <div class="row"><button onclick="cbBuild()">Собрать персонажа</button></div>
         </div>
 
@@ -160,7 +176,7 @@
         <div class="log" id="log"></div>
         <div class="row">
           <input id="action" placeholder="Действие..." onkeydown="if(event.key==='Enter')send()">
-          <select id="assist" style="width:160px" title="Помощник (assist)"></select>
+          <select id="assist" style="width:170px" title="Помощник (assist)"></select>
           <button id="sendbtn" onclick="send()">Отправить</button>
         </div>
         <div class="busy-note hidden" id="busy-note">Нарратор печатает ответ…</div>
@@ -183,35 +199,49 @@
 
 <script>
 let sid = null, token = null, myName = null, mode = 'local';
-let ws = null, currentState = null, currentPlayer = '', lastTurnId = null, busy = false;
-let renderedLogCount = 0;
+let ws = null, wsManualClose = false, currentState = null, currentPlayer = '';
+let lastTurnId = null, busy = false, renderedLogCount = 0;
 let SUBS = {drugs: [], poisons: []}, RECIPES = {};
-let pendingMode = null, pendingCode = null, pendingChar = null;
+let pendingMode = null, pendingCode = null, pendingChar = null, CB = null;
 
+const LOCATION_RU = {head: 'голова', torso: 'корпус', limb: 'конечность', auto: 'корпус'};
+const WOUND_RU = {unharmed: 'невредим', lightly: 'легко ранен',
+                  seriously: 'тяжело ранен', mortally: 'смертельно ранен'};
+const METHOD_NOTE = {
+  complete_package: 'Complete Package: 62 очка STAT (2..8) + 86 очков Skill, максимум навыка 6.',
+  edgerunner: 'Edgerunner: STAT бросаются 1d10 по отдельности (пула нет) + 86 очков Skill.',
+  streetrat: 'Streetrat: STAT и Skill берутся из шаблона роли, распределения нет.'
+};
+
+// HP по книге: 10 + 5 × avg(BODY, WILL) с округлением вверх
 const PREGENS = [
   {name:"Вектор", role:"Solo",
    stats:{INT:3,REF:7,DEX:4,TECH:3,COOL:5,WILL:4,LUCK:2,MOVE:5,BODY:6,EMP:3},
    skills:{handgun:4,melee_weapon:3,evasion:3,athletics:3,perception:3},
-   hp:12,max_hp:12,wound:"unharmed",dsp:0,dead:false,armor:"light_armorjack",
+   hp:35,max_hp:35,wound:"unharmed",dsp:0,dead:false,armor:"light_armorjack",
    weapon:"heavy_pistol", eb:1500, humanity:30,
    cyberware:["Neural Link","Basic Cyberoptic"],
    inventory:["heavy_pistol","light_armorjack","knife","armored_jacket"]},
   {name:"Никс", role:"Netrunner",
    stats:{INT:6,REF:4,DEX:3,TECH:5,COOL:4,WILL:4,LUCK:3,MOVE:4,BODY:4,EMP:4},
    skills:{interface:4,programming:3,stealth:3,persuasion:3,perception:2},
-   hp:8,max_hp:8,wound:"unharmed",dsp:0,dead:false,armor:"leathers",
+   hp:30,max_hp:30,wound:"unharmed",dsp:0,dead:false,armor:"leathers",
    weapon:"medium_pistol", eb:1500, humanity:40,
    cyberware:["Neural Link","Interface Plugs"],
-   inventory:["medium_pistol","leathers","cyberdeck","agent"]}
+   inventory:["medium_pistol","leathers","cyberdeck","agent"],
+   programs:["sword","armor","seeya"]}
 ];
 
 const SCENARIO = {
   scene: "Бар 'Ржавый болт', Ночной Город, 23:40. За угловым столом среди дыма и неоновых бликов сидит фиксер Кесслер. За барной стойкой — два его телохранителя в кевларе с тяжёлыми пистолетами под плащами. На столе у Кесслера — стакан синтетического виски и дата-планшет с контрактом.",
   heat: 1, clocks: {},
   npcs: [
-    {id:"kessler", name:"Фиксер Кесслер", hp:15, max_hp:15, wound:"unharmed", armor:"leathers"},
-    {id:"guard1", name:"Телохранитель Кесслера 1", hp:24, max_hp:24, wound:"unharmed", armor:"kevlar"},
-    {id:"guard2", name:"Телохранитель Кесслера 2", hp:24, max_hp:24, wound:"unharmed", armor:"kevlar"}
+    {id:"kessler", name:"Фиксер Кесслер", hp:35, max_hp:35, wound:"unharmed", armor:"leathers",
+     stats:{REF:4,DEX:4,BODY:4,WILL:5}, skills:{handgun:2,evasion:2}},
+    {id:"guard1", name:"Телохранитель Кесслера 1", hp:40, max_hp:40, wound:"unharmed", armor:"kevlar",
+     stats:{REF:6,DEX:5,BODY:6,WILL:5}, skills:{handgun:4,evasion:3}},
+    {id:"guard2", name:"Телохранитель Кесслера 2", hp:40, max_hp:40, wound:"unharmed", armor:"kevlar",
+     stats:{REF:6,DEX:5,BODY:6,WILL:5}, skills:{handgun:4,evasion:3}}
   ]
 };
 
@@ -219,37 +249,38 @@ const SCENARIO = {
 
 async function startLocal(count) {
   const name = document.getElementById('local-name').value.trim();
-  const players = PREGENS.slice(0, count).map(p => Object.assign({}, p));
+  const players = PREGENS.slice(0, count).map(p => JSON.parse(JSON.stringify(p)));
   if (name && count >= 1) players[0].name = name;
   const r = await fetch('/session', {method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({players, scenario: SCENARIO})});
+  if (!r.ok) { alert('Не удалось создать сессию'); return; }
   const d = await r.json();
-  mode = 'local';
-  sid = d.id;
-  token = null;
+  mode = 'local'; sid = d.id; token = null; myName = null;
   localStorage.setItem('sid_local', sid);
   enterGame(d.state);
 }
 
-// ============ ОНЛАЙН-ЛОББИ ============
+// ============ ВЫБОР ПЕРСОНАЖА ============
 
 function createRoom(solo) { openCharSelect(solo ? 'solo' : 'create'); }
 function joinRoom() { openCharSelect('join'); }
 
-let CB = null;
-
 function csTab(t) {
   document.getElementById('cs-quick').classList.toggle('hidden', t !== 'quick');
   document.getElementById('cs-full').classList.toggle('hidden', t !== 'full');
-  if (t === 'full' && !CB) cbLoad();
+  if (t === 'full') cbLoad();
 }
 
 async function fillRoleSelects() {
-  const o = await (await fetch('/creation/options')).json();
+  const r = await fetch('/creation/options');
+  if (!r.ok) return;
+  const o = await r.json();
   for (const id of ['cs-role', 'cb-role']) {
     const sel = document.getElementById(id);
+    const prev = sel.value;
     sel.innerHTML = '<option value="">🎲 Случайная роль</option>' +
-      o.roles.map(r => `<option value="${r}">${r}</option>`).join('');
+      (o.roles || []).map(x => `<option value="${x}">${x}</option>`).join('');
+    sel.value = prev;
   }
 }
 
@@ -274,60 +305,99 @@ function openCharSelect(modeSel) {
 async function rollChar() {
   const role = document.getElementById('cs-role').value || null;
   const r = await fetch('/chargen', {method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify(role ? {role: role} : {})});
+    body: JSON.stringify(role ? {role} : {})});
   if (!r.ok) { const e = await r.json().catch(()=>({})); alert(e.detail || 'Ошибка генерации'); return; }
   pendingChar = await r.json();
   renderCharPreview();
 }
 
 async function cbLoad() {
-  const role = document.getElementById('cb-role').value || null;
-  CB = await (await fetch('/creation/options' + (role ? '?role=' + role : ''))).json();
+  const role = document.getElementById('cb-role').value || '';
+  const method = document.getElementById('cb-method').value || 'complete_package';
+  const qs = new URLSearchParams({method});
+  if (role) qs.set('role', role);
+  const r = await fetch('/creation/options?' + qs.toString());
+  if (!r.ok) { alert('Не удалось загрузить опции создания'); return; }
+  CB = await r.json();
   CB.spec = {
-    role: CB.role,
+    role: CB.role, method: CB.method,
     stats: Object.assign({}, CB.preset.stats),
     skills: Object.assign({}, CB.preset.skills),
-    gear: CB.preset.gear.slice(), weapon: CB.preset.weapon,
-    armor: CB.preset.armor, programs: CB.preset.programs.slice(),
+    gear: (CB.preset.gear || []).slice(),
+    weapon: CB.preset.weapon, armor: CB.preset.armor,
+    programs: (CB.preset.programs || []).slice(),
   };
-  document.getElementById('cb-weapon').innerHTML = CB.weapons.map(w => `<option ${w===CB.spec.weapon?'selected':''}>${w}</option>`).join('');
-  document.getElementById('cb-armor').innerHTML = CB.armors.map(a => `<option ${a===CB.spec.armor?'selected':''}>${a}</option>`).join('');
+  document.getElementById('cb-method-note').textContent = METHOD_NOTE[CB.method] || '';
+  document.getElementById('cb-weapon').innerHTML =
+    (CB.weapons || []).map(w => `<option ${w===CB.spec.weapon?'selected':''}>${w}</option>`).join('');
+  document.getElementById('cb-armor').innerHTML =
+    (CB.armors || []).map(a => `<option ${a===CB.spec.armor?'selected':''}>${a}</option>`).join('');
   document.getElementById('cb-gear-limit').textContent = CB.gear_limit;
   document.getElementById('cb-prog-limit').textContent = CB.prog_limit;
   cbRender();
 }
 
 function cbRender() {
+  if (!CB) return;
   const s = CB.spec;
-  const statUsed = Object.values(s.stats).reduce((a,b)=>a+b,0);
-  document.getElementById('cb-stat-pool').textContent = (CB.stat_pool - statUsed);
-  document.getElementById('cb-stats').innerHTML = CB.stats.map(k =>
-    `<span class="stat-chip"><b>${k}</b> ${s.stats[k]}
-      <button class="secondary" style="padding:0 6px" onclick="cbStat('${k}',-1)">−</button>
-      <button class="secondary" style="padding:0 6px" onclick="cbStat('${k}',1)">+</button></span>`).join('');
-  const skUsed = Object.values(s.skills).reduce((a,b)=>a+b,0);
-  document.getElementById('cb-skill-pool').textContent = (CB.skill_pool - skUsed);
-  document.getElementById('cb-skills').innerHTML = CB.skills.map(k =>
-    `<span class="stat-chip"><b>${k}</b> ${s.skills[k]||0}
-      <button class="secondary" style="padding:0 6px" onclick="cbSkill('${k}',-1)">−</button>
-      <button class="secondary" style="padding:0 6px" onclick="cbSkill('${k}',1)">+</button></span>`).join('');
-  document.getElementById('cb-gear').innerHTML = CB.gear.map(g =>
+
+  if (CB.stat_pool === null || CB.stat_pool === undefined) {
+    document.getElementById('cb-stat-pool').textContent =
+      CB.method === 'streetrat' ? 'шаблон' : 'бросок 1d10';
+    document.getElementById('cb-stats').innerHTML =
+      (CB.stats || []).map(k => `<span class="stat-chip"><b>${k}</b> ${s.stats[k]}</span>`).join('') +
+      (CB.method === 'edgerunner'
+        ? `<button class="secondary mini" style="margin-left:8px" onclick="cbRollStats()">🎲 Бросить STAT</button>`
+        : '');
+  } else {
+    const used = Object.values(s.stats).reduce((a,b)=>a+b,0);
+    document.getElementById('cb-stat-pool').textContent = (CB.stat_pool - used);
+    document.getElementById('cb-stats').innerHTML = (CB.stats || []).map(k =>
+      `<span class="stat-chip"><b>${k}</b> ${s.stats[k]}
+        <button class="secondary mini" onclick="cbStat('${k}',-1)">−</button>
+        <button class="secondary mini" onclick="cbStat('${k}',1)">+</button></span>`).join('');
+  }
+
+  if (CB.skill_pool === null || CB.skill_pool === undefined) {
+    document.getElementById('cb-skill-pool').textContent = 'шаблон';
+    document.getElementById('cb-skills').innerHTML = (CB.skills || []).map(k =>
+      `<span class="stat-chip"><b>${k}</b> ${s.skills[k]||0}</span>`).join('');
+  } else {
+    const used = Object.values(s.skills).reduce((a,b)=>a+b,0);
+    document.getElementById('cb-skill-pool').textContent = (CB.skill_pool - used);
+    document.getElementById('cb-skills').innerHTML = (CB.skills || []).map(k =>
+      `<span class="stat-chip"><b>${k}</b> ${s.skills[k]||0}
+        <button class="secondary mini" onclick="cbSkill('${k}',-1)">−</button>
+        <button class="secondary mini" onclick="cbSkill('${k}',1)">+</button></span>`).join('');
+  }
+
+  document.getElementById('cb-gear').innerHTML = (CB.gear || []).map(g =>
     `<label style="display:inline-block;margin:2px 6px"><input type="checkbox" style="width:auto"
       ${s.gear.includes(g)?'checked':''} onchange="cbGear('${g}',this.checked)"> ${g}</label>`).join('');
-  document.getElementById('cb-programs').innerHTML = CB.programs.map(p =>
+  document.getElementById('cb-programs').innerHTML = (CB.programs || []).map(p =>
     `<label style="display:inline-block;margin:2px 6px"><input type="checkbox" style="width:auto"
       ${s.programs.includes(p)?'checked':''} onchange="cbProg('${p}',this.checked)"> ${p}</label>`).join('');
 }
 
+async function cbRollStats() {
+  const r = await fetch('/creation/roll_stats', {method:'POST'});
+  if (!r.ok) { alert('Бросок недоступен'); return; }
+  CB.spec.stats = await r.json();
+  cbRender();
+}
+
 function cbStat(k, d) {
+  if (CB.stat_pool === null || CB.stat_pool === undefined) return;
   const s = CB.spec.stats;
   const used = Object.values(s).reduce((a,b)=>a+b,0);
-  const nv = s[k] + d;
+  const nv = (s[k] || 0) + d;
   if (nv < CB.stat_min || nv > CB.stat_max) return;
   if (d > 0 && used >= CB.stat_pool) return;
   s[k] = nv; cbRender();
 }
+
 function cbSkill(k, d) {
+  if (CB.skill_pool === null || CB.skill_pool === undefined) return;
   const s = CB.spec.skills;
   const used = Object.values(s).reduce((a,b)=>a+b,0);
   const nv = (s[k]||0) + d;
@@ -335,12 +405,14 @@ function cbSkill(k, d) {
   if (d > 0 && used >= CB.skill_pool) return;
   s[k] = nv; cbRender();
 }
+
 function cbGear(g, on) {
   const s = CB.spec.gear;
   if (on && !s.includes(g) && s.length < CB.gear_limit) s.push(g);
   if (!on) CB.spec.gear = s.filter(x => x !== g);
   cbRender();
 }
+
 function cbProg(p, on) {
   const s = CB.spec.programs;
   if (on && !s.includes(p) && s.length < CB.prog_limit) s.push(p);
@@ -349,9 +421,11 @@ function cbProg(p, on) {
 }
 
 async function cbBuild() {
+  if (!CB) return;
   CB.spec.weapon = document.getElementById('cb-weapon').value;
   CB.spec.armor = document.getElementById('cb-armor').value;
   CB.spec.name = document.getElementById('cs-name').textContent;
+  CB.spec.method = CB.method;
   const r = await fetch('/creation/build', {method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify(CB.spec)});
   if (!r.ok) { const e = await r.json().catch(()=>({})); alert(e.detail || 'Ошибка сборки'); return; }
@@ -362,10 +436,11 @@ async function cbBuild() {
 function renderCharPreview() {
   const p = pendingChar;
   if (!p) return;
-  const stats = Object.entries(p.stats || {}).map(([k, v]) => `${k} ${v}`).join(' · ');
-  const skills = Object.entries(p.skills || {}).map(([k, v]) => `${k}+${v}`).join(', ');
+  const stats = Object.entries(p.stats || {}).map(([k,v]) => `${k} ${v}`).join(' · ');
+  const skills = Object.entries(p.skills || {}).map(([k,v]) => `${k}+${v}`).join(', ');
   document.getElementById('cs-preview').innerHTML = `
-    <b style="color:#05d9e8">${p.role}</b> • HP ${p.hp}/${p.max_hp} • EB ${p.eb ?? 0}<br>
+    <b style="color:#05d9e8">${p.role}</b> • HP ${p.hp}/${p.max_hp} • EB ${p.eb ?? 0}
+    ${p.creation_method ? ` • <span style="color:#7fbf7f">${p.creation_method}</span>` : ''}<br>
     <b>Статы:</b> ${stats}<br>
     <b>Навыки:</b> ${skills}<br>
     <b>Импланты:</b> ${(p.cyberware || []).join(', ') || '—'}<br>
@@ -388,18 +463,18 @@ async function confirmChar() {
   else await doCreate(name, char, m === 'solo');
 }
 
+// ============ ОНЛАЙН-ЛОББИ ============
+
 async function doCreate(name, char, solo) {
   try {
     const resp = await fetch('/lobby/create', {method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({player_name: name, character: char})});
     if (!resp.ok) {
       const e = await resp.json().catch(() => ({}));
-      showErr('host-err', e.detail || 'Ошибка');
-      return;
+      showErr('host-err', e.detail || 'Ошибка'); return;
     }
     const data = await resp.json();
-    mode = 'online';
-    sid = data.sid; token = data.token; myName = name;
+    mode = 'online'; sid = data.sid; token = data.token; myName = name;
     localStorage.setItem('sid', sid);
     localStorage.setItem('tok_' + sid, token);
     localStorage.setItem('me_' + sid, name);
@@ -411,23 +486,20 @@ async function doCreate(name, char, solo) {
     updateWaitingList();
     connectWS();
   } catch (e) {
-    console.error(e);
-    showErr('host-err', 'Ошибка: ' + e.message);
+    console.error(e); showErr('host-err', 'Ошибка: ' + e.message);
   }
 }
 
 async function doJoin(code, name, char) {
   try {
     const resp = await fetch('/lobby/join', {method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({code: code, player_name: name, character: char})});
+      body: JSON.stringify({code, player_name: name, character: char})});
     if (!resp.ok) {
       const e = await resp.json().catch(() => ({}));
-      showErr('join-err', e.detail || 'Ошибка');
-      return;
+      showErr('join-err', e.detail || 'Ошибка'); return;
     }
     const data = await resp.json();
-    mode = 'online';
-    sid = data.sid; token = data.token; myName = name;
+    mode = 'online'; sid = data.sid; token = data.token; myName = name;
     localStorage.setItem('sid', sid);
     localStorage.setItem('tok_' + sid, token);
     localStorage.setItem('me_' + sid, name);
@@ -437,8 +509,7 @@ async function doJoin(code, name, char) {
     updateWaitingList();
     connectWS();
   } catch (e) {
-    console.error(e);
-    showErr('join-err', 'Ошибка: ' + e.message);
+    console.error(e); showErr('join-err', 'Ошибка: ' + e.message);
   }
 }
 
@@ -450,7 +521,7 @@ function copyCode() {
 function updateWaitingList() {
   const list = document.getElementById('waiting-players');
   list.innerHTML = '';
-  (currentState.players || []).forEach((p, i) => {
+  ((currentState && currentState.players) || []).forEach((p, i) => {
     const li = document.createElement('li');
     li.className = i === 0 ? 'host' : '';
     li.textContent = `${p.name} [${p.role}]` + (i === 0 ? ' (хост)' : '');
@@ -462,8 +533,7 @@ async function startOnline() {
   const resp = await fetch(`/lobby/${sid}/start?token=${token}`, {method:'POST'});
   if (!resp.ok) {
     const e = await resp.json().catch(() => ({}));
-    alert(e.detail || 'Ошибка старта');
-    return;
+    alert(e.detail || 'Ошибка старта'); return;
   }
   const d = await resp.json();
   currentState = d.state;
@@ -479,36 +549,36 @@ function setWsDot(on) {
 }
 
 function connectWS() {
+  if (!sid) return;
+  wsManualClose = false;
   if (ws) { ws.onclose = null; try { ws.close(); } catch (e) {} }
-  if (e.code === 4003) {
-      localStorage.removeItem('tok_' + sid);
-      localStorage.removeItem('me_' + sid);
-      showErr('err', 'WS: токен устарел — выйдите в меню и войдите в комнату заново');
-    }  
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   const url = `${proto}//${location.host}/ws/${sid}?player=${encodeURIComponent(myName || '')}&token=${token || ''}`;
   ws = new WebSocket(url);
   ws.onopen = () => { console.log('[WS] connected'); setWsDot(true); };
-  ws.onmessage = (e) => {
-    const msg = JSON.parse(e.data);
-    if (msg.type === 'state') {
-      currentState = msg.state;
-      if (currentState.status === 'playing') {
-        if (document.getElementById('game').classList.contains('hidden')) enterGame(currentState);
-        else { syncLog(); renderAll(); }
-      } else {
-        updateWaitingList();
-      }
+  ws.onmessage = (ev) => {
+    let msg;
+    try { msg = JSON.parse(ev.data); } catch (err) { return; }
+    if (msg.type !== 'state') return;
+    currentState = msg.state;
+    if (currentState.status === 'playing') {
+      if (document.getElementById('game').classList.contains('hidden')) enterGame(currentState);
+      else { syncLog(); renderAll(); }
+    } else {
+      updateWaitingList();
     }
   };
-  ws.onclose = (e) => {
-    console.log('[WS] closed, code:', e.code);
+  ws.onclose = (ev) => {
+    console.log('[WS] closed, code:', ev.code);
     setWsDot(false);
-    if (e.code === 4003) showErr('err', 'WS: неверный токен игрока');
-    if (e.code === 4004) showErr('err', 'WS: сессия не найдена');
-    if (mode === 'online' && sid && e.code !== 4003 && e.code !== 4004) {
-      setTimeout(connectWS, 3000);  // автопереподключение
+    if (ev.code === 4003) {
+      localStorage.removeItem('tok_' + sid);
+      localStorage.removeItem('me_' + sid);
+      showErr('err', 'WS: токен устарел — выйдите в меню и войдите в комнату заново');
+      return;
     }
+    if (ev.code === 4004) { showErr('err', 'WS: сессия не найдена'); return; }
+    if (!wsManualClose && mode === 'online' && sid) setTimeout(connectWS, 3000);
   };
   ws.onerror = () => console.log('[WS] error');
 }
@@ -526,25 +596,33 @@ function enterGame(state) {
   document.getElementById('game').classList.remove('hidden');
   document.getElementById('log').innerHTML = '';
   renderedLogCount = 0;
-  currentPlayer = state.order[state.turn];
+  currentPlayer = (state.order || [])[state.turn ?? 0] || '';
   addLog(`Сессия ${sid}. Ходит: ${currentPlayer}`, 'mech');
-  const scene = state.scenario?.scene || '';
+  const scene = (state.scenario && state.scenario.scene) || '';
   if (scene) addLog(`[СЦЕНА]\n${scene}`, 'narr');
+  if (state.initiative && state.initiative.length) {
+    addLog(`[инициатива] ${state.initiative.join(' → ')}`, 'mech');
+  }
   syncLog();
   renderAll();
 }
 
 function activeName() {
-  if (mode === 'online' && currentState) return (currentState.order || [])[currentState.turn ?? 0];
-  return currentPlayer;
+  if (!currentState) return currentPlayer;
+  return (currentState.order || [])[currentState.turn ?? 0] || currentPlayer;
 }
 
 function renderAll() {
   if (!currentState) return;
   const act = activeName();
-  document.getElementById('turnwho').textContent = act;
-  document.getElementById('act-info').textContent =
-    `Акт: ${currentState.act || 'fixer'} • Heat: ${currentState.heat ?? 0}`;
+  document.getElementById('turnwho').textContent = act || '—';
+  const bits = [`Акт: ${currentState.act || 'fixer'}`, `Heat: ${currentState.heat ?? 0}`];
+  if (currentState.act === 'recon') bits.push(`Слоты разведки: ${currentState.recon_slots ?? 0}`);
+  if (currentState.act === 'infiltration') {
+    bits.push(`Подозрение: ${currentState.suspicion ?? 0}`);
+    bits.push(`Локдаун: ${currentState.lockdown ?? 0}/6`);
+  }
+  document.getElementById('act-info').textContent = bits.join(' • ');
   document.getElementById('action').placeholder = `Действие для: ${act}`;
   const canAct = mode === 'local' || myName === act;
   document.getElementById('sendbtn').disabled = !canAct || busy;
@@ -570,6 +648,12 @@ function fillAssistSelect(act) {
 
 function hpColor(pct) { return pct > 50 ? '#0f0' : (pct > 25 ? '#ff0' : '#f00'); }
 
+function armorLine(p) {
+  if (!p.armor) return '—';
+  const cur = p.armor_sp_current;
+  return cur === undefined || cur === null ? p.armor : `${p.armor} (SP ${cur}, изношена)`;
+}
+
 function buildCharPanel(p, isActive) {
   const div = document.createElement('div');
   div.className = 'char-panel' + (isActive ? ' active-turn' : '') + (p.dead ? ' dead' : '');
@@ -578,13 +662,15 @@ function buildCharPanel(p, isActive) {
   const stats = Object.entries(p.stats || {}).map(([k,v]) => `<span class="stat-chip"><b>${k}</b> ${v}</span>`).join('');
   const skills = Object.entries(p.skills || {}).sort((a,b) => b[1]-a[1]).map(([k,v]) => `${k} +${v}`).join(', ') || '—';
   const effects = (p.active_effects || []).map(e => `${e.key} (${e.turns_left} х.)`).join(', ');
+  const wound = WOUND_RU[p.wound] || p.wound || 'невредим';
   div.innerHTML = `
     <h3>${p.name} <span class="role">[${p.role}]</span>${p.dead ? ' ☠' : ''}</h3>
     <div class="hp-bar"><div class="hp-fill" style="width:${hpPct}%;background:${hpColor(hpPct)}"></div></div>
-    <div class="panel-row" style="color:#888;font-size:0.82em">HP ${p.hp}/${p.max_hp} • ${p.wound || 'unharmed'}</div>
+    <div class="panel-row" style="color:#888;font-size:0.82em">HP ${p.hp}/${p.max_hp} • ${wound}</div>
     <div class="panel-row"><b>EB:</b> ${p.eb ?? 0} &nbsp; <b>Человечность:</b> ${p.humanity ?? '—'}</div>
     <div class="panel-row"><b>Оружие:</b> ${p.weapon || '—'}</div>
-    <div class="panel-row"><b>Броня:</b> ${p.armor || '—'}</div>
+    <div class="panel-row"><b>Броня:</b> ${armorLine(p)}</div>
+    ${p.death_save_penalty ? `<div class="panel-row"><b>Штраф спасбросков:</b> +${p.death_save_penalty}</div>` : ''}
     ${p.vehicle ? `<div class="panel-row"><b>Транспорт:</b> ${p.vehicle}</div>` : ''}
     ${effects ? `<div class="panel-row"><b>Эффекты:</b> ${effects}</div>` : ''}
     <div class="panel-section">Характеристики</div>
@@ -594,7 +680,9 @@ function buildCharPanel(p, isActive) {
     <div class="panel-section">Импланты</div>
     <div class="panel-small">${(p.cyberware || []).join(', ') || '—'}</div>
     <div class="panel-section">Инвентарь</div>
-    <div class="panel-small">${(p.inventory || []).join(', ') || '—'}</div>`;
+    <div class="panel-small">${(p.inventory || []).join(', ') || '—'}</div>
+    ${(p.programs || []).length ? `<div class="panel-section">Программы</div>
+      <div class="panel-small">${p.programs.join(', ')}</div>` : ''}`;
   return div;
 }
 
@@ -607,7 +695,7 @@ function buildNpcPanel() {
     return `<div style="margin-bottom:10px">
       <div style="font-size:0.95em">${n.name}${n.dead ? ' ☠' : ''}</div>
       <div class="hp-bar"><div class="hp-fill" style="width:${pct}%;background:${hpColor(pct)}"></div></div>
-      <div style="font-size:0.78em;color:#888">HP ${n.hp}/${n.max_hp} • ${n.wound || 'unharmed'} • броня: ${n.armor || 'нет'}</div>
+      <div style="font-size:0.78em;color:#888">HP ${n.hp}/${n.max_hp} • ${WOUND_RU[n.wound] || n.wound || 'невредим'} • ${armorLine(n)}</div>
     </div>`;
   }).join('');
   div.innerHTML = `<h3 style="color:#ff2a6d">NPC в сцене</h3>${npcs || '<div class="panel-small">Никого</div>'}`;
@@ -635,7 +723,9 @@ function buildActionsPanel() {
   const usable = (me.inventory || []).filter(it => SUBS.drugs.includes(it) || SUBS.poisons.includes(it));
   if (usable.length) {
     html += '<div class="panel-section">Применить</div>';
-    usable.forEach(it => { html += `<button class="secondary" style="margin:2px;padding:6px 10px;font-size:0.8em" onclick="useItem('${it}')">${it}</button>`; });
+    usable.forEach(it => {
+      html += `<button class="secondary" style="margin:2px;padding:6px 10px;font-size:0.8em" onclick="useItem('${it}')">${it}</button>`;
+    });
   }
   const sk = me.skills || {};
   if (me.role === 'Tech' || me.role === 'Techie' || (sk['basic_tech'] || 0) >= 2 || (sk['weaponstech'] || 0) >= 2) {
@@ -664,27 +754,11 @@ function renderPanels() {
   left.innerHTML = ''; right.innerHTML = '';
   const act = activeName();
   (currentState.players || []).forEach((p, i) => {
-    const panel = buildCharPanel(p, p.name === act);
-    (i % 2 === 0 ? left : right).appendChild(panel);
+    (i % 2 === 0 ? left : right).appendChild(buildCharPanel(p, p.name === act));
   });
   const ap = buildActionsPanel();
   if (ap) left.appendChild(ap);
   left.appendChild(buildContractPanel());
-  if (currentState.chase && currentState.chase.status === 'active') right.appendChild(buildChasePanel());
-  right.appendChild(buildNpcPanel());
-}
-
-function renderPanels() {
-  const left = document.getElementById('panel-left');
-  const right = document.getElementById('panel-right');
-  left.innerHTML = ''; right.innerHTML = '';
-  const act = activeName();
-  (currentState.players || []).forEach((p, i) => {
-    const panel = buildCharPanel(p, p.name === act);
-    (i % 2 === 0 ? left : right).appendChild(panel);
-  });
-  const ap = buildActionsPanel();
-  if (ap) left.appendChild(ap);
   if (currentState.chase && currentState.chase.status === 'active') right.appendChild(buildChasePanel());
   right.appendChild(buildNpcPanel());
 }
@@ -701,23 +775,40 @@ function addLog(text, cls, echo) {
   log.scrollTop = log.scrollHeight;
 }
 
-const LOCATION_RU = {head: 'голова', torso: 'корпус', limb: 'конечность', auto: 'корпус'};
-
 function renderLogEntry(e) {
   addLog(`${e.player}: ${e.text}`, 'mech');
   const m = e.mech || {};
-  if (m.no_roll) addLog('[без броска] свободное действие', 'mech');
-  else if (m.action_type) {
+  if (m.no_roll) {
+    addLog('[без броска] свободное действие', 'mech');
+  } else if (m.action_type) {
     const loc = (m.location && m.location !== 'auto') ? ` [${LOCATION_RU[m.location] || m.location}]` : '';
     addLog(`[механика] ${m.action_type}${loc} | ${m.stat_key}+${m.skill}: ${m.total} vs DV${m.dv} -> ${m.success ? 'УСПЕХ' : 'ПРОВАЛ'}`, 'mech');
+    const mods = [];
+    if (m.aimed_penalty) mods.push(`прицел ${m.aimed_penalty}`);
+    if (m.armor_penalty) mods.push(`броня ${m.armor_penalty}`);
+    if (m.wound_penalty) mods.push(`ранение ${m.wound_penalty}`);
+    if (mods.length) addLog(`[модификаторы] ${mods.join(', ')}`, 'mech');
   }
   if (m.assist) addLog(`[помощь] +${m.assist.bonus || 0}`, 'mech');
-  if (m.damage != null) addLog(`цель ${m.target}: урон ${m.damage} - SP${m.armor_sp} = ${m.net_damage}`, 'mech');
+  if (m.damage != null) {
+    let line = `цель ${m.target}: урон ${m.damage} - SP${m.armor_sp} = ${m.net_damage}`;
+    if (m.damage_multiplier && m.damage_multiplier > 1) line += ` ×${m.damage_multiplier} (после брони)`;
+    if (m.bonus_damage) line += ` +${m.bonus_damage} мимо брони`;
+    addLog(line, 'mech');
+  }
+  if (m.armor_ablation) {
+    addLog(`[абляция брони] SP ${m.armor_ablation.before} → ${m.armor_ablation.after}`, 'mech');
+  }
   if (m.critical_injury) addLog(`[критическая травма у ${m.target || 'цели'}] ${m.critical_injury}`, 'mech');
+  if (m.death_save) {
+    const ds = m.death_save;
+    addLog(`[спасбросок смерти] d10=${ds.roll} +${ds.penalty || 0} vs BODY ${ds.body} -> ${ds.dead ? 'ПРОВАЛ' : 'выжил'}`, 'mech');
+  }
   if (m.npc_reaction) {
     const nr = m.npc_reaction;
     (nr.shots || [nr]).forEach(s => {
-      addLog(`[ответ NPC] ${s.npc} → ${nr.target_player || 'игрок'}: ${s.success ? 'попадание' : 'промах'}, урон ${s.net_damage || 0}`, 'mech');
+      addLog(`[ответ NPC] ${s.npc} → ${nr.target_player || 'игрок'}: ${s.success ? 'попадание' : 'промах'} (${s.total} vs DV${s.dv}), урон ${s.net_damage || 0}`, 'mech');
+      if (s.armor_ablation) addLog(`[абляция брони игрока] SP ${s.armor_ablation.before} → ${s.armor_ablation.after}`, 'mech');
       if (s.critical_injury) addLog(`[критическая травма у игрока] ${s.critical_injury}`, 'mech');
     });
     if (nr.principal) addLog(`[NPC] ${nr.principal.npc}: ${nr.principal.text}`, 'mech');
@@ -727,6 +818,10 @@ function renderLogEntry(e) {
 
 function syncLog() {
   const log = (currentState && currentState.log) || [];
+  if (renderedLogCount > log.length) {
+    document.getElementById('log').innerHTML = '';
+    renderedLogCount = 0;
+  }
   for (let i = renderedLogCount; i < log.length; i++) renderLogEntry(log[i]);
   renderedLogCount = log.length;
 }
@@ -736,10 +831,7 @@ function syncLog() {
 async function send() {
   if (busy || !sid) return;
   const actorName = activeName();
-  if (mode === 'online' && myName !== actorName) {
-    showErr('err', 'Сейчас не ваш ход');
-    return;
-  }
+  if (mode === 'online' && myName !== actorName) { showErr('err', 'Сейчас не ваш ход'); return; }
   const action = document.getElementById('action').value.trim();
   if (!action) return;
   const assistVal = document.getElementById('assist').value || null;
@@ -781,6 +873,7 @@ function showErr(id, msg) {
 }
 
 function exitToMenu() {
+  wsManualClose = true;
   if (ws) { ws.onclose = null; try { ws.close(); } catch (e) {} }
   localStorage.removeItem('sid_local');
   localStorage.removeItem('sid');
@@ -795,16 +888,20 @@ document.querySelectorAll('.star').forEach(s => {
   s.onclick = () => {
     selectedRating = parseInt(s.dataset.v);
     document.querySelectorAll('.star').forEach(x => x.classList.remove('active'));
-    for (let i = 1; i <= selectedRating; i++) document.querySelector(`.star[data-v="${i}"]`).classList.add('active');
+    for (let i = 1; i <= selectedRating; i++) {
+      document.querySelector(`.star[data-v="${i}"]`).classList.add('active');
+    }
     document.getElementById('edited').classList.toggle('hidden', selectedRating > 3);
   };
 });
+
 function resetStars() {
   selectedRating = 0;
   document.querySelectorAll('.star').forEach(x => x.classList.remove('active'));
   document.getElementById('edited').classList.add('hidden');
   document.getElementById('edited').value = '';
 }
+
 async function saveRate() {
   if (!selectedRating || !lastTurnId) return;
   const edited = document.getElementById('edited').value.trim() || null;
@@ -817,9 +914,11 @@ async function saveRate() {
 // ============ ПРЕДМЕТЫ И КРАФТ ============
 
 async function loadDataDicts() {
-  const [s, r] = await Promise.all([fetch('/data/substances'), fetch('/data/recipes')]);
-  if (s.ok) SUBS = await s.json();
-  if (r.ok) RECIPES = (await r.json()).recipes;
+  try {
+    const [s, r] = await Promise.all([fetch('/data/substances'), fetch('/data/recipes')]);
+    if (s.ok) SUBS = await s.json();
+    if (r.ok) RECIPES = (await r.json()).recipes || {};
+  } catch (e) { console.log('dicts unavailable', e); }
 }
 
 async function refreshState() {
@@ -842,7 +941,7 @@ async function craftItem(recipe) {
     {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({recipe})});
   const d = await r.json().catch(()=>({}));
   if (!r.ok) { alert(d.detail || 'Ошибка'); return; }
-  addLog(`${name} создаёт: ${RECIPES[recipe]?.name || recipe} -> ${d.success ? 'УСПЕХ' : 'ПРОВАЛ'}`, 'mech');
+  addLog(`${name} создаёт: ${(RECIPES[recipe] && RECIPES[recipe].name) || recipe} -> ${d.success ? 'УСПЕХ' : 'ПРОВАЛ'}`, 'mech');
   await refreshState();
 }
 
@@ -850,8 +949,7 @@ async function craftItem(recipe) {
 
 window.addEventListener('load', async () => {
   const params = new URLSearchParams(window.location.search);
-  const urlSid = params.get('sid');
-  const stored = urlSid || localStorage.getItem('sid') || localStorage.getItem('sid_local');
+  const stored = params.get('sid') || localStorage.getItem('sid') || localStorage.getItem('sid_local');
   if (!stored) return;
   const tok = localStorage.getItem('tok_' + stored);
   try {
@@ -864,8 +962,7 @@ window.addEventListener('load', async () => {
     const st = await r.json();
     sid = stored;
     if (tok) {
-      mode = 'online';
-      token = tok;
+      mode = 'online'; token = tok;
       myName = localStorage.getItem('me_' + stored) || (st.order || [])[0];
       currentState = st;
       if (st.status === 'playing') { enterGame(st); connectWS(); }
