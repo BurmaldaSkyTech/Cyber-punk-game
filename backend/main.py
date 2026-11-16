@@ -171,23 +171,32 @@ JUDGE_SYS = """Ты — механический интерпретатор пр
  "weapon": "ключ оружия или null", "target": "id NPC или null",
  "second": null или такой же объект для ВТОРОЙ части составного действия,
  "query": "короткий запрос для поиска правил или null"}
+ Для атак добавляй поле "location": "head" | "torso" | "limb" | "auto" — куда целится игрок.
+"стреляет в голову" / "бьёт в шею" -> "head"; "в корпус/грудь" -> "torso"; "по руке/ноге" -> "limb"; иначе "auto".
 
 === ПРИОРИТЕТЫ (проверяй СНАЧАЛА, сверху вниз) ===
 
 1. АТАКА: выстрел, удар, бросок гранаты → attack_ranged / attack_melee.
-   - Если игрок использует приём боевого искусства (удар ногой, блок, подсечка, бросок, разоружение, удушение) — добавь поле "move": "название_приёма" (например, "high_kick", "sweep", "throw").
-   - Список доступных приёмов зависит от стиля персонажа (martial_arts навык 2+).
-2. ВЗЛОМ: сеть, электроника, замки, камеры → hack или skill.
-2.5 ТРАНСПОРТ: вождение, манёвр, погоня, таран, посадка в машину → drive / ram.
-   - "садится в машину", "газует", "маневрирует", "уходит от погони" → drive
-   - "таранит", "врезается в машину" → ram
-3. СОЦИАЛКА (если есть ЛЮБОЕ из): обращение к NPC по имени, просьба ("дай", "одолжи", "можно", "разреши", "покажи", "расскажи"), вопрос NPC ("расскажи", "объясни", "а что если"), убеждение, торг, ложь, лесть → social.
-   ВАЖНО: если игрок говорит "дай X и мы пойдём" / "одолжи Y на дело" / "покажи контракт" — это ВСЁ ЕЩЁ social, потому что главное — просьба/приказ, а "пойдём" лишь аргумент.
-4. НАВЫК: скрытность, акробатика, вождение, поиск, медицина и т.п. без обращения к NPC → skill.
-5. FREE (без броска): ТОЛЬКО если фраза — чистое описание состояния или команда без обращения к NPC.
-   Примеры free: "Сидит на стуле", "Стоит у стены", "Пропускаю ход", "Жду", "Отправляемся", "Встаю и иду к выходу".
-   НЕ free: "Кес, дай винтовку" (social!), "Покажи контракт" (social!), "Скажи мне, работаем тихо?" (social).
+   ⚠️ ВАЖНО: фразы "давай нападай", "ну попробуй", "подойди ближе", "попробуй достать" БЕЗ явного упоминания оружия/удара — это НЕ атака. Это провокация (social) или ожидание (free).
+   Атака ТОЛЬКО если есть: "стреляю", "бью", "кидаю", "атакую", "выстрел", "удар", "бросаю гранату", "замахиваюсь".
+   ❌ НЕ атака: "ну давай, нападай", "попробуй", "давай-давай", "подойди"
+   ✅ Атака: "стреляю в Кесслера", "бью его кулаком", "кидаю в него стул", "замахиваюсь ножом"
 
+2. ВЗЛОМ: сеть, электроника, замки, камеры → hack или skill.
+
+3. СОЦИАЛКА (если есть ЛЮБОЕ из): обращение к NPC по имени, просьба ("дай", "одолжи", "можно", "разреши", "покажи", "расскажи"), вопрос NPC ("расскажи", "объясни", "а что если"), убеждение, торг, ложь, лесть, провокация ("ну давай", "попробуй", "нападай", "подойди") → social.
+   ВАЖНО: если игрок говорит "дай X и мы пойдём" / "одолжи Y на дело" / "покажи контракт" — это ВСЁ ЕЩЁ social, потому что главное — просьба/приказ, а "пойдём" лишь аргумент.
+   Провокации типа "ну давай нападай", "ну попробуй достать" — это social (навык intimidation или persuasion).
+
+4. НАВЫК: скрытность, акробатика, вождение, поиск, медицина и т.п. без обращения к NPC → skill.
+   ⚠️ ТРИВИАЛЬНЫЕ ДЕЙСТВИЯ: чтение текста, осмотр предмета перед собой, взгляд на объект — это simple (DV9) или free, НЕ everyday.
+   ❌ НЕ everyday: "читает контракт", "осматривает планшет", "смотрит на карту"
+   ✅ everyday: "ищет скрытую информацию", "декодирует шифр", "анализирует данные"
+
+5. FREE (без броска): ТОЛЬКО если фраза — чистое описание состояния или команда без обращения к NPC.
+   Примеры free: "Сидит на стуле", "Стоит у стены", "Пропускаю ход", "Жду", "Отправляемся", "Встаю и иду к выходу", "ну давай нападай" (ожидание атаки NPC).
+   НЕ free: "Кес, дай винтовку" (social!), "Покажи контракт" (social!), "Скажи мне, работаем тихо?" (social).
+   
 === ПРИМЕРЫ (для обучения, не копируй их фразы) ===
 
 "стреляю в охранника из тяжёлого пистолета" -> {"action_type":"attack_ranged","skill":"handgun","dv_key":"difficult","weapon":"heavy_pistol","target":"guard1","second":null,"query":"ranged attack DV"}
@@ -208,10 +217,27 @@ JUDGE_SYS = """Ты — механический интерпретатор пр
 "бросаю противника через бедро" -> {"action_type":"attack_melee","skill":"martial_arts","dv_key":"professional","weapon":null,"move":"throw","target":"guard1","second":null,"query":"martial arts throw"}
 "газует и уходит от погони" -> {"action_type":"drive","skill":"drive_land_vehicle","dv_key":"difficult","weapon":null,"target":null,"second":null,"query":"drive chase maneuver"}
 "таранит машину охранника" -> {"action_type":"ram","skill":"drive_land_vehicle","dv_key":"professional","weapon":null,"target":"guard1","second":null,"query":"ram vehicle damage"}
+"ну давай, нападай" -> {"action_type":"social","skill":"intimidation","dv_key":"everyday","weapon":null,"target":"kessler","second":null,"query":"intimidation check"}
+"читает контракт на столе" -> {"action_type":"skill","skill":"perception","dv_key":"simple","weapon":null,"target":null,"second":null,"query":"reading DV"}
+"осматривает планшет" -> {"action_type":"skill","skill":"perception","dv_key":"simple","weapon":null,"target":null,"second":null,"query":"perception check"}
+"ну попробуй достать" -> {"action_type":"free","skill":null,"dv_key":null,"weapon":null,"target":null,"second":null,"query":null}
 
 dv_key: тривиально -> everyday; настороже -> difficult; защита -> professional; на грани -> heroic.
 skill строго из списка персонажа.
 Верни ТОЛЬКО JSON."""
+
+NARR_HARD_RULES = """=== ЖЁСТКИЕ ПРАВИЛА (нарушать запрещено) ===
+1. Оружие здесь — ОБЫЧНОЕ огнестрельное и холодное: пули, вспышка из ствола, дым, гильзы, лязг затвора.
+   ЗАПРЕЩЕНЫ слова и образы: "пульсарный луч", "лазер", "плазма", "энергетический луч", "луч из пистолета",
+   "обгоревшая кожа" от ножа или пули. Нож режет и колет, пуля пробивает или рикошетит.
+2. Описывай ТОЛЬКО выстрелы и удары, перечисленные в ПОСЛЕДСТВИЯХ. Нет строки выстрела телохранителя —
+   не придумывай его. Строка "ПРОМАХ" — опиши промах (пуля в стену, мимо головы), а не попадание.
+3. Все выстрелы NPC направлены в игрока, указанного как target_player. Не меняй цель и не добавляй новых стрелков.
+4. Крит-травма принадлежит ЦЕЛИ атаки (имя в строке крита), а не стрелку.
+5. Не-боец (фиксер, гражданский), по которому ударили, ныряет за укрытие и зовёт охрану, но НЕ стреляет,
+   если в последствиях указано "сам НЕ стреляет".
+6. Броня поглотила урон (net=0): опиши удар, рикошет, искры от брони; цель НЕ ранена. Не пиши "увернулся".
+"""
 
 NARR_SYS_UNIVERSAL = """Ты — игровой мастер текстовой киберпанк-настолки. Пиши СТРОГО на русском, без латинских и иероглифических букв внутри слов.
 Жанр: мрачный неонуар, короткая жёсткая проза.
@@ -254,7 +280,13 @@ NARR_SYS_UNIVERSAL = """Ты — игровой мастер текстовой 
 
 7. Объём 3–5 предложений, затем 1–2 вопроса и 2–4 варианта инфинитивом.
 
-8. РЕАКЦИЯ ПЕРСОНАЖЕЙ: все персонажи в сцене активно реагируют. Если игрок успешно атакует — цель отбивается, уклоняется, контратакует, зовёт подмогу. Пассивное поведение запрещено.
+8. РЕАКЦИЯ ПЕРСОНАЖЕЙ: 
+   - Если игрок УСПЕШНО атакует NPC (даже если броня поглотила урон):
+     * Цель атаки ОБЯЗАНА контратаковать в том же ходу
+     * ВСЕ другие враждебные NPC в сцене (охранники, телохранители) также атакуют игрока
+     * Описывай КАЖДУЮ контратаку отдельно: кто стреляет, попадает/промахивается, урон
+   - Если игрок ПРОВАЛИЛ атаку: цель уклонилась, но другие NPC всё равно могут атаковать
+   - Пассивное поведение запрещено: NPC не могут просто "смотреть" после атаки
 
 9. УСПЕХ социального действия: персонаж раскрывает факт из РАСКРОЙ ФАКТ. ПРОВАЛ: уклоняется, но даёт ОДНУ зацепку.
 
@@ -471,19 +503,26 @@ def consequences(mech):
                             f"цель НЕ ранена, но удар пришёлся")
             elif net > 0:
                 cons.append(f"- УСПЕШНОЕ попадание по {m.get('target')}: сквозь броню {net}"
-                            + (", КРИТ-ТРАВМА (+5 мимо брони)" if m.get("critical_injury") else "")
+                            + (f", КРИТ-ТРАВМА У {m.get('target')}: {m.get('critical_injury')}"
+                               if m.get("critical_injury") else "")
                             + f", у цели HP {m.get('target_hp')} ({m.get('target_wound')})")
             else:
                 cons.append(f"- попадание по {m.get('target')}: урон {net}")
-    
+
     r = mech.get("npc_reaction")
     if r:
-        if r["success"]:
-            cons.append(f"- {r['npc']} КОНТРАТАКУЕТ: урон {r['damage']} - "
-                        f"SP{r.get('armor_sp', 0)} = {r['net_damage']} по игроку")
-        else:
-            cons.append(f"- {r['npc']} контратакует и промахивается ({r['total']} vs DV{r['dv']})")
-    
+        cons.append(f"- ВСЕ выстрелы NPC ниже направлены ТОЛЬКО в игрока {r.get('target_player')}:")
+        for s in r.get("shots", []):
+            if s["success"]:
+                cons.append(f"  * {s['npc']} стреляет в {r.get('target_player')}: ПОПАДАНИЕ, "
+                            f"урон {s.get('damage', 0)} - SP{s.get('armor_sp', 0)} = {s.get('net_damage', 0)}"
+                            + (f", КРИТ У ИГРОКА: {s.get('critical_injury')}" if s.get("critical_injury") else ""))
+            else:
+                cons.append(f"  * {s['npc']} стреляет в {r.get('target_player')}: ПРОМАХ "
+                            f"({s['total']} vs DV{s['dv']})")
+        p = r.get("principal")
+        if p:
+            cons.append(f"- {p['npc']} (не боец): {p['text']}")
     return "\n".join(cons) or "- урон не наносился"
 
 
@@ -548,29 +587,144 @@ def detect_departure_intent(text):
     no = any(w in words for w in CONFIRM_NO)
     return leave, yes, no
 
+LOCATION_RU = {"head": "голова", "torso": "корпус", "limb": "конечность", "auto": "корпус"}
+
+NARR_FLAVOR_SYS = """Ты — соавтор наррации Cyberpunk RED. Верни ТОЛЬКО JSON с художественными описаниями БЕЗ исходов.
+Запрещено в любых полях: слова попал/попадает/промах/урон/поглот/брон/ранен/убит/умер/SP/кевлар/луч/лазер/плазма, любые цифры и DV.
+Поля:
+"action": 1-2 предложения описания действия игрока (жест, движение, звук, атмосфера), без исхода.
+"hit": 1 предложение ощущения/картинки момента контакта или промаха, без исхода и цифр.
+"shots": массив ровно по числу выстрелов NPC; каждый элемент — 1 предложение картинки выстрела (трассер, гильза, вспышка, укрытие), без исхода.
+"principal": 1 предложение поведения не-бойца (фиксер/гражданский) в момент опасности, без исхода.
+Стиль: нуар, неон, дым, конкретные детали. Имена не упоминай — их подставит сервер.
+"""
+
+_FLAVOR_FORBID = ("попал", "попадает", "промах", "урон", "поглот", "брон", "ранен",
+                  "убит", "умер", "sp", "кевлар", "луч", "лазер", "плазм")
+
+
+def _clean_flavor(s, default):
+    s = (s or "").strip()
+    if not s or any(t in s.lower() for t in _FLAVOR_FORBID):
+        return default
+    return s
+
+
+def sanitize_flavor(flavor, n_shots):
+    flavor = flavor if isinstance(flavor, dict) else {}
+    raw_shots = flavor.get("shots") or []
+    return {
+        "action": _clean_flavor(flavor.get("action"), "движение резкое, без предупреждения"),
+        "hit": _clean_flavor(flavor.get("hit"), ""),
+        "shots": [_clean_flavor(raw_shots[i] if i < len(raw_shots) else "",
+                                "трассер режет дым над стойкой") for i in range(n_shots)],
+        "principal": _clean_flavor(flavor.get("principal"), "вжимается в укрытие за столом"),
+    }
+
+
+def _attack_outcome_lines(m):
+    lines = []
+    loc = LOCATION_RU.get(m.get("location", "auto"), "корпус")
+    if m.get("success"):
+        lines.append(f"Атака ({loc}): попадание.")
+        dmg = m.get("damage", 0)
+        sp = m.get("armor_sp", 0)
+        net = m.get("net_damage", 0)
+        if net > 0:
+            lines.append(f"Урон {dmg}, броня SP{sp} срезает {dmg - net}: сквозь проходит {net}. "
+                         f"{m.get('target')} ранен — HP {m.get('target_hp')} ({m.get('target_wound')}).")
+        else:
+            lines.append(f"Урон {dmg} полностью поглощён бронёй SP{sp}: "
+                         f"{m.get('target')} не ранен, но удар пришёлся.")
+        if m.get("critical_injury"):
+            lines.append(f"Критическая травма у {m.get('target')}: {m['critical_injury']}.")
+    else:
+        lines.append(f"Атака ({loc}): промах — цель уходит с линии огня.")
+    return lines
+
+
+def assemble_narration(mech, actor_name, flavor):
+    """Исходы всегда из механики; художественный текст — только из flavor-слотов."""
+    lines = []
+    at = mech.get("action_type")
+    if mech.get("no_roll"):
+        lines.append(f"{actor_name}: {flavor['action']}. Действие не требует броска.")
+    elif at in ("attack_ranged", "attack_melee"):
+        lines.append(f"{actor_name}: {flavor['action']}.")
+        if flavor["hit"]:
+            lines.append(flavor["hit"])
+        lines += _attack_outcome_lines(mech)
+        second = mech.get("second")
+        if isinstance(second, dict) and second.get("action_type") in ("attack_ranged", "attack_melee"):
+            lines += _attack_outcome_lines(second)
+    else:
+        lines.append(f"{actor_name}: {flavor['action']}.")
+        lines.append(f"Проверка {mech.get('stat_key')}+{mech.get('skill')}: "
+                     f"{mech.get('total')} против DV{mech.get('dv')} — "
+                     f"{'УСПЕХ' if mech.get('success') else 'ПРОВАЛ'}.")
+        if flavor["hit"]:
+            lines.append(flavor["hit"])
+
+    r = mech.get("npc_reaction")
+    if r:
+        shots = r.get("shots", [])
+        for i, s in enumerate(shots):
+            fl = flavor["shots"][i] if i < len(flavor["shots"]) else "трассер режет дым над стойкой"
+            if s["success"]:
+                net = s.get("net_damage", 0)
+                if net > 0:
+                    out = (f"пуля попадает в {r.get('target_player')}: урон {s.get('damage', 0)} - "
+                           f"SP{s.get('armor_sp', 0)} = {net}, HP игрока {s.get('player_hp', '?')}.")
+                else:
+                    out = (f"пуля попадает в {r.get('target_player')}, но броня SP{s.get('armor_sp', 0)} "
+                           f"поглощает весь урон {s.get('damage', 0)}: раны нет.")
+            else:
+                out = f"выстрел в {r.get('target_player')} проходит мимо."
+            lines.append(f"{s['npc']}: {fl}. {out}")
+        p = r.get("principal")
+        if p:
+            lines.append(f"{p['npc']}: {flavor['principal']}. {p['text']}.")
+    return "\n".join(lines)
+
+ACT3_SCENE = ("Внутренний периметр дата-узла Biotechnica. Коридоры с серым линолеумом, "
+              "гул серверных за стенами, камеры под потолком. Служебные двери с кодовыми "
+              "замками, патрули охраны проходят каждые несколько минут. Где-то в глубине — "
+              "стойка регистрации и лифт на нижние уровни.")
+
+
+def suggest_followups(st, mech):
+    act = st.get("act", "fixer")
+    base = {
+        "fixer": ["Расспросить о контракте (persuasion)",
+                  "Поторговаться об авансе (trading)",
+                  "Осмотреть телохранителей (perception)"],
+        "recon": ["Осмотреть периметр (perception)",
+                  "Вычислить маршрут патрулей (deduction)",
+                  "Взломать камеру (hack)"],
+        "infiltration": ["Прокрасться мимо охраны (stealth)",
+                         "Взломать замок (hack)",
+                         "Отвлечь охранника (persuasion)"],
+    }.get(act, [])
+    if not mech.get("no_roll") and not mech.get("success"):
+        base = base + ["Повторить попытку другим путём"]
+    return base[:4]
+
 def _act_core(sid: str, req: ActionIn):
-    st = SESSIONS.get(sid)
-    print(f"[DEBUG act] st found: {st is not None}")
+    st = get_state(sid)
     if not st:
         raise HTTPException(404)
 
     actor = next((p for p in st["players"] if p["name"] == req.player), None)
-    print(f"[DEBUG act] actor found: {actor is not None}, req.player={req.player!r}")
-    print(f"[DEBUG act] players names: {[p['name'] for p in st['players']]}")
     if not actor:
         raise HTTPException(404, "no such player")
 
     expected = st["order"][st["turn"]]
-    print(f"[DEBUG act] expected={expected!r}, turn={st['turn']}")
     if req.player != expected:
         raise HTTPException(409, f"Сейчас ходит {expected}, а не {req.player}")
 
     scene = st["scenario"].get("scene", "")
-    print(f"[DEBUG act] scene ok")
     npc_lines = "; ".join(f"{n['id']}={n['name']}" for n in st["npcs"])
     threat = next((n["name"] for n in st["npcs"] if n["id"] == st.get("threat")), "нет")
-    rules_ctx = SEARCH.search(f"{req.text} rules", k=3)
-    ctx = "\n\n---\n\n".join(f"[{m['crumb']}] {m['text'][:500]}" for m in rules_ctx)
 
     judge = chat_json([
         {"role": "system", "content": JUDGE_SYS},
@@ -613,38 +767,138 @@ def _act_core(sid: str, req: ActionIn):
     is_info = (mech.get("action_type") in ("social", "hack", "skill")
                and not mech.get("no_roll")
                and any(k in req.text.lower() for k in info_kw))
-    just_revealed = None
     if is_info and mech.get("success"):
         remaining = [b for b in CONTRACT_BEATS if b not in st["revealed_beats"]]
         if remaining:
-            just_revealed = remaining[0]
-            st["revealed_beats"].append(just_revealed)
+            st["revealed_beats"].append(remaining[0])
 
+    # === АКТЫ И ПЕРЕХОДЫ ===
     act_type = st.get("act", "fixer")
     do_transition = False
-    departure_question = False   # ← ДОБАВЬ ЭТУ СТРОКУ ЗДЕСЬ 
- 
-    act_ctx = {
-        "fixer": (f"АКТ 1 (ТОРГ С ФИКСЕРОМ): раунд {st.get('fixer_round', 0)}, "
-                  f"patience {st.get('patience', 4)}, контракт {st.get('contract', {})}"),
-        "recon": (f"АКТ 2 (РЕКОГНОСЦИРОВКА): слоты {st.get('recon_slots', 0)}, "
-                  f"assets {st.get('assets', [])}"),
-        "infiltration": (f"АКТ 3 (ПРОНИКНОВЕНИЕ): suspicion {st.get('suspicion', 0)}, "
-                         f"lockdown {st.get('lockdown', 0)}/6, assets {st.get('assets', [])}"),
-    }.get(act_type, "")
+    departure_question = False
+    act_notice = ""
 
-    outcome = ("НЕЙТРАЛЬНО (без броска)" if mech.get("no_roll")
-               else ("УСПЕХ" if mech["success"] else "ПРОВАЛ"))
-    facts = json.dumps(mech, ensure_ascii=False)
-    cons = consequences(mech)
-    flavor = SEARCH.search(scene.split(".")[0] + " район банды техника", k=2)
-    fctx = "\n".join(f"[{m['crumb']}] {m['text'][:250]}" for m in flavor)
-    prev = "\n".join(f"{lg['player']}: {lg['text']} => {lg['narration'][:180]}"
-                     for lg in st["log"][-2:])
+    if act_type == "fixer":
+        st["fixer_round"] = st.get("fixer_round", 0) + 1
+        if mech.get("action_type") == "social" and not mech.get("no_roll") and not mech.get("success"):
+            st["patience"] = st.get("patience", 4) - 1
 
+        leave, yes, no = detect_departure_intent(req.text)
+        recent_logs = st["log"][-4:]
+        fail_count = sum(1 for lg in recent_logs if lg.get("mech", {}).get("success") is False)
+        kessler_tired = fail_count >= 3 or st.get("patience", 4) <= 0
+
+        if st.get("pending_departure"):
+            if no:
+                st["pending_departure"] = False
+            elif yes or leave:
+                st["pending_departure"] = False
+                do_transition = True
+        elif kessler_tired:
+            do_transition = True
+        elif leave:
+            st["pending_departure"] = True
+            departure_question = True
+
+        if do_transition:
+            scenario.advance_act(st)
+            st["act"] = "recon"
+            st["recon_slots"] = 3
+            st["assets"] = []
+            st["scenario"]["scene"] = ACT2_SCENE
+            transition_narr = (
+                ("Кесслер нетерпеливо машет рукой: 'Хватит болтать, время идёт. Идите и сделайте свою работу.' "
+                 "Он забирает планшет и уходит, не оглядываясь."
+                 if kessler_tired else
+                 "Вы поднимаетесь из-за стола. Кесслер кивает на прощание: 'Удачи. Не подведите.' "
+                 "Он сворачивает планшет и уходит вглубь бара.")
+                + "\n\n[ПЕРЕХОД К АКТУ 2: РЕКОГНОСЦИРОВКА]\n\n" + ACT2_SCENE)
+            st["log"].append({"player": "GM", "text": "[переход]", "mech": {}, "narration": transition_narr})
+            turn_no = len(st["log"]) - 1
+            turn_id = db.log_turn(sid, turn_no, "GM", "[переход]", {}, {}, transition_narr)
+            return {
+                "mechanics": {"action_type": "free", "no_roll": True},
+                "narration": transition_narr,
+                "questions": ["Что вы делаете для рекогносцировки?"],
+                "choices": suggest_followups(st, {"no_roll": True}),
+                "turn_no": turn_no, "turn_id": turn_id,
+                "next_player": st["order"][0],
+                "state": public_state(st),
+            }
+
+    elif act_type == "recon":
+        if mech.get("action_type") in ("skill", "hack", "social") and not mech.get("no_roll"):
+            st["recon_slots"] = st.get("recon_slots", 0) - 1
+            if mech.get("success"):
+                st.setdefault("assets", []).append(
+                    {"skill": judge.get("skill"), "note": req.text[:60]})
+        if st.get("recon_slots", 0) <= 0:
+            scenario.advance_act(st)
+            st["act"] = "infiltration"
+            st["suspicion"] = 0
+            st["lockdown"] = 0
+            st["scenario"]["scene"] = ACT3_SCENE
+            act_notice = "[ПЕРЕХОД К АКТУ 3: ПРОНИКНОВЕНИЕ]\n\n" + ACT3_SCENE
+
+    elif act_type == "infiltration":
+        if not mech.get("no_roll") and not mech.get("success"):
+            st["suspicion"] = st.get("suspicion", 0) + 1
+            if st["suspicion"] >= 3:
+                st["suspicion"] = 0
+                st["lockdown"] = st.get("lockdown", 0) + 1
+                act_notice = f"[ТРЕВОГА: уровень локдауна {st['lockdown']}/6] Охрана ужесточает патрули."
+                if st["lockdown"] >= 6 and "alarm" not in st.get("flags", []):
+                    st.setdefault("flags", []).append("alarm")
+                    act_notice += " ОБЪЕКТ ПОЛНОСТЬЮ ЗАБЛОКИРОВАН."
+
+    # === НАРРАЦИЯ: исходы из механики, художественность из flavor-слотов ===
     actor_name = actor["name"]
-    players_names = ", ".join(p["name"] for p in st["players"])
-    npc_block = spawn.npc_context(st)
+    shots_n = len((mech.get("npc_reaction") or {}).get("shots", []))
+    prev_short = (st["log"][-1]["narration"][:160] if st["log"] else "")
+    flavor_raw = chat_json([
+        {"role": "system", "content": NARR_FLAVOR_SYS},
+        {"role": "user", "content":
+            f"Игрок: {actor_name}\nДействие: {req.text}\nСцена: {scene[:200]}\n"
+            f"Предыдущий момент: {prev_short}\n"
+            f"Тип: {mech.get('action_type')}, исход: "
+            f"{'без броска' if mech.get('no_roll') else ('успех' if mech.get('success') else 'провал')}\n"
+            f"Выстрелов NPC: {shots_n}\nВерни JSON flavor."}
+    ], model=globals().get("NARR_MODEL", JUDGE_MODEL), temperature=0.7)
+    narration = assemble_narration(mech, actor_name, sanitize_flavor(flavor_raw, shots_n))
+
+    if departure_question:
+        narration += ("\n\nКесслер смотрит выжидающе: "
+                      "«Уверены, что уходите? Контракт останется невыполненным.»")
+    if act_notice:
+        narration += "\n\n" + act_notice
+
+    # === ЛОГ, ХОД, СПАСБРОСКИ ===
+    st["log"].append({"player": actor_name, "text": req.text, "mech": mech, "narration": narration})
+    turn_no = len(st["log"]) - 1
+    turn_id = db.log_turn(sid, turn_no, actor_name, req.text, mech, {}, narration)
+
+    alive = [p for p in st["players"] if not p.get("dead")]
+    if alive:
+        for _ in range(len(st["order"])):
+            st["turn"] = (st["turn"] + 1) % len(st["order"])
+            if not st["players"][st["turn"]].get("dead"):
+                break
+
+    for p in st["players"]:
+        if p.get("wound") == "mortally" and not p.get("dead"):
+            p["death_save"] = engine.death_save(p)
+
+    return {
+        "mechanics": mech,
+        "assist": assist,
+        "narration": narration,
+        "questions": [],
+        "choices": suggest_followups(st, mech),
+        "turn_no": turn_no,
+        "turn_id": turn_id,
+        "next_player": st["order"][st["turn"]],
+        "state": public_state(st),
+    }
  
    # Контекст нетраннинга
     net_context = ""
@@ -714,7 +968,7 @@ def _act_core(sid: str, req: ActionIn):
     narr_sys = NARR_SYS_UNIVERSAL
 
     reply = chat_json([
-        {"role": "system", "content": narr_sys},
+        {"role": "system", "content": NARR_HARD_RULES + "\n" + NARR_SYS_UNIVERSAL},
         {"role": "user", "content": user_msg}
     ], model=NARR_MODEL, temperature=0.6)
 
@@ -1150,3 +1404,4 @@ def data_recipes():
         out[k] = {"name": v["name"], "components": v["components"],
                   "skill": v["skill"], "dv": v["dv"]}
     return {"recipes": out}        
+    
