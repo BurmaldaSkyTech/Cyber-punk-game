@@ -17,7 +17,13 @@ ACT2_SCENE = ("Дата-узел Biotechnica, промзона sector 7, ноч�
               "замок; северный забор уходит в слепую зону камер. Изнутри гудят серверные.")
 
 --- ACT3_SCENE ---
-NOT FOUND
+ACT3_SCENE = ("Внутренний периметр дата-узла Biotechnica. Коридоры с серым линолеумом, "
+              "гул серверных за стенами, камеры под потолком. Служебные двери с кодовыми "
+              "замками, патрули охраны проходят каждые несколько минут. Где-то в глубине — "
+              "стойка регистрации и лифт на нижние уровни.")
+
+--- LOCATION_RU ---
+LOCATION_RU = {"head": "голова", "torso": "корпус", "limb": "конечность", "auto": "корпус"}
 
 --- NARR_FLAVOR_SYS ---
 NARR_FLAVOR_SYS = """Ты — соавтор наррации Cyberpunk RED. Верни ТОЛЬКО JSON с художественными описаниями БЕЗ исходов и БЕЗ новых предметов.
@@ -109,6 +115,25 @@ dv_key: тривиально -> everyday; настороже -> difficult; за�
 skill строго из списка персонажа.
 Верни ТОЛЬКО JSON."""
 
+--- ACCEPT_WORDS ---
+ACCEPT_WORDS = ("беру", "согласен", "согласна", "принимаю", "подписываю", "по рукам", "deal")
+
+--- ACT2_TRIGGERS_WORDS ---
+ACT2_TRIGGERS_WORDS = [
+    "отправляемся", "выдвигаемся", "уходим", "ухожу", "уйду", "идём", "идем",
+    "едем", "пошёл", "пошла", "пошли", "погнали", "прощается", "покидает",
+]
+
+--- NEG_DEPARTURE ---
+NEG_DEPARTURE = ["не ухожу", "никуда не", "остаюсь", "остаёмся", "остаемся",
+                 "передумал", "передумала", "не пойду", "не идём", "не идем", "вернусь"]
+
+--- CONFIRM_YES ---
+CONFIRM_YES = ["да", "подтверждаю", "уходим", "идём", "идем", "пошли", "погнали", "ухожу"]
+
+--- CONFIRM_NO ---
+CONFIRM_NO = ["нет", "остаюсь", "остаёмся", "остаемся", "передумал", "передумала", "вернусь"]
+
 --- detect_departure_intent ---
 def detect_departure_intent(text):
     """Определяет намерение уйти из бара.
@@ -123,6 +148,16 @@ def detect_departure_intent(text):
     yes = any(w in words for w in CONFIRM_YES)
     no = any(w in words for w in CONFIRM_NO)
     return leave, yes, no
+
+--- _clean_flavor ---
+def _clean_flavor(s, default, block=()):
+    s = (s or "").strip()
+    low = s.lower()
+    if not s or any(t in low for t in _FLAVOR_FORBID):
+        return default
+    if any(b and b.lower() in low for b in block):
+        return default
+    return s
 
 --- sanitize_flavor ---
 def sanitize_flavor(flavor, n_shots, npc_names=(), actor_name="", declared=""):
@@ -141,6 +176,27 @@ def sanitize_flavor(flavor, n_shots, npc_names=(), actor_name="", declared=""):
         "principal": _clean_flavor(flavor.get("principal"), "вжимается в укрытие за столом",
                                    block=block_obj),
     }
+
+--- _attack_outcome_lines ---
+def _attack_outcome_lines(m):
+    lines = []
+    loc = LOCATION_RU.get(m.get("location", "auto"), "корпус")
+    if m.get("success"):
+        lines.append(f"Атака ({loc}): попадание.")
+        dmg = m.get("damage", 0)
+        sp = m.get("armor_sp", 0)
+        net = m.get("net_damage", 0)
+        if net > 0:
+            lines.append(f"Урон {dmg}, броня SP{sp} срезает {dmg - net}: сквозь проходит {net}. "
+                         f"{m.get('target')} ранен — HP {m.get('target_hp')} ({m.get('target_wound')}).")
+        else:
+            lines.append(f"Урон {dmg} полностью поглощён бронёй SP{sp}: "
+                         f"{m.get('target')} не ранен, но удар пришёлся.")
+        if m.get("critical_injury"):
+            lines.append(f"Критическая травма у {m.get('target')}: {m['critical_injury']}.")
+    else:
+        lines.append(f"Атака ({loc}): промах — цель уходит с линии огня.")
+    return lines
 
 --- assemble_narration ---
 def assemble_narration(mech, actor_name, flavor, extra=None):
@@ -223,6 +279,39 @@ def consequences(mech):
         if p:
             cons.append(f"- {p['npc']} (не боец): {p['text']}")
     return "\n".join(cons) or "- урон не наносился"
+
+--- handover_contract ---
+def handover_contract(st):
+    """Фиксер выполняет свою цель: передаёт контракт и аванс. Идемпотентно."""
+    if st.get("contract_given"):
+        return []
+    st["contract_given"] = True
+    remaining = [b for b in CONTRACT_BEATS if b not in st["revealed_beats"]]
+    st["revealed_beats"] = list(CONTRACT_BEATS)
+    advance = (st.get("contract") or {}).get("advance") or 500
+    for p in st["players"]:
+        p["eb"] = p.get("eb", 0) + advance
+    st.setdefault("granted", []).append("дата-планшет с контрактом")
+    lines = ["Кесслер двигает по столу дата-планшет: «Контракт ваш. Аванс на счетах, детали внутри.»"]
+    lines += [f"— {b}" for b in remaining]
+    lines.append(f"Аванс {advance} eb каждому игроку. Планшет контракта у партии.")
+    return lines
+
+--- apply_world_ticks ---
+def apply_world_ticks(st, mech):
+    """Детерминированные тики мира: heat и длительности эффектов."""
+    notes = []
+    at = mech.get("action_type")
+    if at in ("attack_ranged", "attack_melee", "ram"):
+        st["heat"] = min(10, st.get("heat", 0) + 1)
+    elif at in ("hack", "skill") and not mech.get("no_roll") and not mech.get("success"):
+        st["heat"] = min(10, st.get("heat", 0) + 1)
+    for p in st["players"]:
+        expired = substances.tick_effects(p)
+        if expired:
+            notes.append(f"Эффекты завершились у {p['name']}: {', '.join(expired)}")
+            st.setdefault("flags", []).append(f"effect_expired:{','.join(expired)}")
+    return notes
 
 --- suggest_followups ---
 def suggest_followups(st, mech):
@@ -496,6 +585,134 @@ def act(sid: str, req: ActionIn):
     persist(st)
     broadcast_now(sid, {"type": "state", "state": public_state(st)})
     return result
+
+--- chargen_endpoint ---
+def chargen_endpoint(req: ChargenIn):
+    from backend import creation
+    try:
+        return creation.random_character(req.role)
+    except Exception as e:
+        raise HTTPException(400, f"chargen: {e}")
+
+--- creation_options ---
+def creation_options(role: str = None):
+    from backend import creation
+    return creation.options(role)
+
+--- creation_build ---
+def creation_build(spec: dict):
+    from backend import creation
+    try:
+        return creation.build(spec)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+--- lobby_create ---
+def lobby_create(req: CreateLobby):
+    sid = uuid.uuid4().hex[:8]
+    code = "".join(_random.choices(string.ascii_uppercase + string.digits, k=6))
+    token = uuid.uuid4().hex
+
+    ch = dict(req.character)
+    ch["name"] = req.player_name
+
+    st = {
+        "id": sid, "code": code,
+        "scenario": DEFAULT_SCENARIO,
+        "heat": 1, "clocks": {}, "flags": [], "log": [],
+        "turn": 0, "threat": None,
+        "order": [ch["name"]],
+        "players": [ch],
+        "npcs": [dict(n) for n in DEFAULT_SCENARIO["npcs"]],
+        "revealed_beats": [], "granted": [],
+        "tokens": {ch["name"]: token},
+        "status": "lobby",
+        **scenario.init_scenario(),
+    }
+    persist(st)
+    return {"sid": sid, "code": code, "token": token, "state": public_state(st)}
+
+--- lobby_join ---
+def lobby_join(req: JoinLobby):
+    st = find_by_code(req.code)
+    if not st:
+        raise HTTPException(404, "Комната не найдена")
+    if st.get("status") != "lobby":
+        raise HTTPException(400, "Игра уже началась")
+    if req.player_name in st["order"]:
+        raise HTTPException(400, "Имя занято")
+    if len(st["order"]) >= 4:
+        raise HTTPException(400, "Комната заполнена (максимум 4)")
+
+    token = uuid.uuid4().hex
+    ch = dict(req.character)
+    ch["name"] = req.player_name
+    st["players"].append(ch)
+    st["order"].append(ch["name"])
+    st["tokens"][ch["name"]] = token
+    persist(st)
+    broadcast_now(st["id"], {"type": "state", "state": public_state(st)})
+    return {"sid": st["id"], "token": token, "state": public_state(st)}
+
+--- lobby_start ---
+def lobby_start(sid: str, token: str):
+    st = get_state(sid)
+    if not st:
+        raise HTTPException(404)
+    if st["tokens"].get(st["order"][0]) != token:
+        raise HTTPException(403, "Только хост может начать игру")
+    st["status"] = "playing"
+    persist(st)
+    broadcast_now(sid, {"type": "state", "state": public_state(st)})
+    return {"ok": True, "state": public_state(st)}
+
+--- ws_endpoint ---
+async def ws_endpoint(websocket: WebSocket, sid: str,
+                      player: str = None, token: str = None):
+    st = get_state(sid)
+    if not st:
+        await websocket.close(code=4004)
+        return
+    if st.get("tokens") and token:
+        if st["tokens"].get(player) != token:
+            await websocket.close(code=4003)
+            return
+    await manager.connect(sid, websocket, player or "spectator")
+    try:
+        await websocket.send_json({"type": "state", "state": public_state(st)})
+        while True:
+            await websocket.receive_text()  # ping от клиента
+    except WebSocketDisconnect:
+        manager.disconnect(sid, websocket)
+
+--- get_state ---
+def get_state(sid):
+    st = SESSIONS.get(sid)
+    if st is None:
+        st = db.load_session(sid)
+        if st:
+            SESSIONS[sid] = st
+    return st
+
+--- persist ---
+def persist(st):
+    SESSIONS[st["id"]] = st
+    db.save_session(st["id"], st)
+
+--- public_state ---
+def public_state(st):
+    """Состояние без секретов (токены не отдаём клиентам)."""
+    return {k: v for k, v in st.items() if k != "tokens"}
+
+--- broadcast_now ---
+def broadcast_now(sid, message):
+    if LOOP is None:
+        print(f"[WARN] broadcast пропущен: LOOP is None (sid={sid})")
+        return
+    if not manager.conns.get(sid):
+        print(f"[WARN] broadcast пропущен: нет WS-подключений (sid={sid})")
+        return
+    asyncio.run_coroutine_threadsafe(manager.broadcast(sid, message), LOOP)
 
 
 ===== backend/engine.py =====
@@ -801,3 +1018,325 @@ def _npc_attack_roll(npc, weapon, wkey, target_player):
             if dr.get("critical_injury"):
                 res["critical_injury"] = dr["critical_injury"]
     return res
+
+--- _is_hostile ---
+def _is_hostile(npc):
+    """Враждебен ли NPC (боец охраны и т.п.)."""
+    name = (npc.get("name") or "").lower()
+    return any(k in name for k in HOSTILE_KEYWORDS)
+
+--- _npc_weapon_key ---
+def _npc_weapon_key(npc):
+    name = (npc.get("name") or "").lower()
+    if any(k in name for k in ("телохранитель", "охранник", "солдат", "боевик")):
+        return "heavy_pistol"
+    return "medium_pistol"
+
+
+===== backend/creation.py =====
+
+--- ROLE_ALIASES ---
+ROLE_ALIASES = {
+    "techie": "Tech", "tech": "Tech", "netrunner": "Netrunner", "solo": "Solo",
+    "rockerboy": "Rockerboy", "fixer": "Fixer", "nomad": "Nomad",
+    "medtech": "Medtech", "lawman": "Lawman", "exec": "Exec", "media": "Media",
+}
+
+--- ROLES ---
+ROLES = ["Solo", "Netrunner", "Tech", "Rockerboy", "Fixer", "Nomad",
+         "Medtech", "Lawman", "Exec", "Media"]
+
+--- STATS ---
+STATS = ["INT", "REF", "DEX", "TECH", "COOL", "WILL", "LUCK", "MOVE", "BODY", "EMP"]
+
+--- SKILLS ---
+SKILLS = ["handgun", "melee_weapon", "martial_arts", "evasion", "athletics",
+          "perception", "stealth", "persuasion", "conversation", "intimidation",
+          "trading", "interface", "programming", "electronics_security_tech",
+          "basic_tech", "weaponstech", "drive_land_vehicle", "first_aid",
+          "streetwise", "deduction"]
+
+--- GEAR ---
+GEAR = ["agent", "cyberdeck", "toolkit", "medkit", "flashlight", "lockpick",
+        "grapple", "camera", "armored_jacket", "restraints"]
+
+--- PROGRAMS ---
+PROGRAMS = ["sword", "armor", "shield", "banhammer", "deckkrash",
+            "hellhound", "seeya", "pathfinder"]
+
+--- ROLE_PRESETS ---
+ROLE_PRESETS = {
+    "Solo":      {"stats": {"INT": 3, "REF": 7, "DEX": 5, "TECH": 3, "COOL": 5, "WILL": 4, "LUCK": 2, "MOVE": 5, "BODY": 6, "EMP": 3},
+                  "skills": {"handgun": 4, "melee_weapon": 3, "evasion": 3, "athletics": 3, "perception": 3},
+                  "weapon": "heavy_pistol", "armor": "light_armorjack",
+                  "gear": ["armored_jacket", "knife"], "cyber": ["Neural Link"], "programs": []},
+    "Netrunner": {"stats": {"INT": 6, "REF": 4, "DEX": 3, "TECH": 5, "COOL": 4, "WILL": 4, "LUCK": 3, "MOVE": 4, "BODY": 4, "EMP": 4},
+                  "skills": {"interface": 4, "programming": 3, "stealth": 3, "perception": 2, "electronics_security_tech": 2},
+                  "weapon": "medium_pistol", "armor": "leathers",
+                  "gear": ["cyberdeck", "agent"], "cyber": ["Neural Link", "Interface Plugs"],
+                  "programs": ["sword", "armor", "seeya"]},
+    "Tech":      {"stats": {"INT": 5, "REF": 4, "DEX": 4, "TECH": 7, "COOL": 4, "WILL": 4, "LUCK": 3, "MOVE": 4, "BODY": 4, "EMP": 4},
+                  "skills": {"basic_tech": 4, "weaponstech": 3, "electronics_security_tech": 3, "perception": 2},
+                  "weapon": "medium_pistol", "armor": "leathers",
+                  "gear": ["toolkit", "lockpick"], "cyber": ["Neural Link"], "programs": []},
+}
+
+--- normalize_role ---
+def normalize_role(role):
+    if not role:
+        return random.choice(ROLES)
+    return ROLE_ALIASES.get(str(role).strip().lower(), "Solo")
+
+--- preset ---
+def preset(role):
+    r = normalize_role(role)
+    return ROLE_PRESETS.get(r, _DEFAULT), r
+
+--- random_character ---
+def random_character(role=None, name=None):
+    p, r = preset(role)
+    return _finalize(name or random.choice(HANDLES), r, p["stats"], p["skills"],
+                     p["weapon"], p["armor"], p["gear"], p["cyber"], p["programs"])
+
+--- options ---
+def options(role=None):
+    p, r = preset(role)
+    return {"role": r, "roles": ROLES, "stats": STATS, "stat_pool": STAT_POOL,
+            "stat_min": STAT_MIN, "stat_max": STAT_MAX, "skills": SKILLS,
+            "skill_pool": SKILL_POOL, "skill_max": SKILL_MAX, "gear": GEAR,
+            "gear_limit": GEAR_LIMIT, "weapons": WEAPON_CHOICES, "armors": ARMOR_CHOICES,
+            "programs": PROGRAMS, "prog_limit": PROG_LIMIT, "preset": p}
+
+--- build ---
+def build(spec):
+    role = normalize_role(spec.get("role"))
+    stats = {k: int(spec.get("stats", {}).get(k, STAT_MIN)) for k in STATS}
+    if any(not (STAT_MIN <= v <= STAT_MAX) for v in stats.values()):
+        raise ValueError("статы вне диапазона 2..8")
+    if sum(stats.values()) > STAT_POOL:
+        raise ValueError(f"пул статов превышен (макс {STAT_POOL})")
+    skills = {k: int(v) for k, v in (spec.get("skills") or {}).items() if int(v) > 0}
+    if any(not (0 <= v <= SKILL_MAX) for v in skills.values()):
+        raise ValueError("навык вне диапазона 0..6")
+    if sum(skills.values()) > SKILL_POOL:
+        raise ValueError(f"пул навыков превышен (макс {SKILL_POOL})")
+    gear = [g for g in (spec.get("gear") or []) if g in GEAR][:GEAR_LIMIT]
+    weapon = spec.get("weapon") if spec.get("weapon") in WEAPON_CHOICES else "medium_pistol"
+    armor = spec.get("armor") if spec.get("armor") in ARMOR_CHOICES else "leathers"
+    programs = [p for p in (spec.get("programs") or []) if p in PROGRAMS][:PROG_LIMIT]
+    cyber = ["Neural Link"]
+    if role == "Netrunner":
+        cyber.append("Interface Plugs")
+        if "cyberdeck" not in gear:
+            gear.append("cyberdeck")
+    return _finalize(spec.get("name") or random.choice(HANDLES), role, stats, skills,
+                     weapon, armor, gear, cyber, programs)
+
+
+===== static/index.html =====
+
+--- renderLogEntry ---
+function renderLogEntry(e) {
+  addLog(`${e.player}: ${e.text}`, 'mech');
+  const m = e.mech || {};
+  if (m.no_roll) addLog('[без броска] свободное действие', 'mech');
+  else if (m.action_type) {
+    const loc = (m.location && m.location !== 'auto') ? ` [${LOCATION_RU[m.location] || m.location}]` : '';
+    addLog(`[механика] ${m.action_type}${loc} | ${m.stat_key}+${m.skill}: ${m.total} vs DV${m.dv} -> ${m.success ? 'УСПЕХ' : 'ПРОВАЛ'}`, 'mech');
+  }
+  if (m.assist) addLog(`[помощь] +${m.assist.bonus || 0}`, 'mech');
+  if (m.damage != null) addLog(`цель ${m.target}: урон ${m.damage} - SP${m.armor_sp} = ${m.net_damage}`, 'mech');
+  if (m.critical_injury) addLog(`[критическая травма у ${m.target || 'цели'}] ${m.critical_injury}`, 'mech');
+  if (m.npc_reaction) {
+    const nr = m.npc_reaction;
+    (nr.shots || [nr]).forEach(s => {
+      addLog(`[ответ NPC] ${s.npc} → ${nr.target_player || 'игрок'}: ${s.success ? 'попадание' : 'промах'}, урон ${s.net_damage || 0}`, 'mech');
+      if (s.critical_injury) addLog(`[критическая травма у игрока] ${s.critical_injury}`, 'mech');
+    });
+    if (nr.principal) addLog(`[NPC] ${nr.principal.npc}: ${nr.principal.text}`, 'mech');
+  }
+  if (e.narration) addLog(e.narration, 'narr');
+}
+
+--- syncLog ---
+function syncLog() {
+  const log = (currentState && currentState.log) || [];
+  for (let i = renderedLogCount; i < log.length; i++) renderLogEntry(log[i]);
+  renderedLogCount = log.length;
+}
+
+--- connectWS ---
+function connectWS() {
+  if (ws) { ws.onclose = null; try { ws.close(); } catch (e) {} }
+  if (e.code === 4003) {
+      localStorage.removeItem('tok_' + sid);
+      localStorage.removeItem('me_' + sid);
+      showErr('err', 'WS: токен устарел — выйдите в меню и войдите в комнату заново');
+    }  
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const url = `${proto}//${location.host}/ws/${sid}?player=${encodeURIComponent(myName || '')}&token=${token || ''}`;
+  ws = new WebSocket(url);
+  ws.onopen = () => { console.log('[WS] connected'); setWsDot(true); };
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === 'state') {
+      currentState = msg.state;
+      if (currentState.status === 'playing') {
+        if (document.getElementById('game').classList.contains('hidden')) enterGame(currentState);
+        else { syncLog(); renderAll(); }
+      } else {
+        updateWaitingList();
+      }
+    }
+  };
+  ws.onclose = (e) => {
+    console.log('[WS] closed, code:', e.code);
+    setWsDot(false);
+    if (e.code === 4003) showErr('err', 'WS: неверный токен игрока');
+    if (e.code === 4004) showErr('err', 'WS: сессия не найдена');
+    if (mode === 'online' && sid && e.code !== 4003 && e.code !== 4004) {
+      setTimeout(connectWS, 3000);  // автопереподключение
+    }
+  };
+  ws.onerror = () => console.log('[WS] error');
+}
+
+--- send ---
+async function send() {
+  if (busy || !sid) return;
+  const actorName = activeName();
+  if (mode === 'online' && myName !== actorName) {
+    showErr('err', 'Сейчас не ваш ход');
+    return;
+  }
+  const action = document.getElementById('action').value.trim();
+  if (!action) return;
+  const assistVal = document.getElementById('assist').value || null;
+  busy = true;
+  document.getElementById('sendbtn').disabled = true;
+  document.getElementById('busy-note').classList.remove('hidden');
+  document.getElementById('err').textContent = '';
+  document.getElementById('action').value = '';
+  addLog(`${actorName}: ${action}`, 'mech', true);
+  try {
+    const body = {player: actorName, text: action};
+    if (assistVal) body.assist = assistVal;
+    if (mode === 'online') body.token = token;
+    const r = await fetch(`/session/${sid}/action`, {method:'POST',
+      headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+    if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.detail || `HTTP ${r.status}`); }
+    const d = await r.json();
+    if (!d || typeof d !== 'object') throw new Error('Пустой ответ сервера');
+    lastTurnId = d.turn_id;
+    if (d.state) currentState = d.state;
+    if (mode === 'local') currentPlayer = d.next_player;
+    document.querySelectorAll('[data-echo]').forEach(el => el.remove());
+    syncLog();
+    renderAll();
+    if (lastTurnId) { document.getElementById('rating').classList.remove('hidden'); resetStars(); }
+  } catch (e) {
+    document.querySelectorAll('[data-echo]').forEach(el => el.remove());
+    showErr('err', 'Ошибка: ' + e.message);
+  } finally {
+    busy = false;
+    document.getElementById('busy-note').classList.add('hidden');
+    renderAll();
+  }
+}
+
+--- cbLoad ---
+async function cbLoad() {
+  const role = document.getElementById('cb-role').value || null;
+  CB = await (await fetch('/creation/options' + (role ? '?role=' + role : ''))).json();
+  CB.spec = {
+    role: CB.role,
+    stats: Object.assign({}, CB.preset.stats),
+    skills: Object.assign({}, CB.preset.skills),
+    gear: CB.preset.gear.slice(), weapon: CB.preset.weapon,
+    armor: CB.preset.armor, programs: CB.preset.programs.slice(),
+  };
+  document.getElementById('cb-weapon').innerHTML = CB.weapons.map(w => `<option ${w===CB.spec.weapon?'selected':''}>${w}</option>`).join('');
+  document.getElementById('cb-armor').innerHTML = CB.armors.map(a => `<option ${a===CB.spec.armor?'selected':''}>${a}</option>`).join('');
+  document.getElementById('cb-gear-limit').textContent = CB.gear_limit;
+  document.getElementById('cb-prog-limit').textContent = CB.prog_limit;
+  cbRender();
+}
+
+--- cbBuild ---
+async function cbBuild() {
+  CB.spec.weapon = document.getElementById('cb-weapon').value;
+  CB.spec.armor = document.getElementById('cb-armor').value;
+  CB.spec.name = document.getElementById('cs-name').textContent;
+  const r = await fetch('/creation/build', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(CB.spec)});
+  if (!r.ok) { const e = await r.json().catch(()=>({})); alert(e.detail || 'Ошибка сборки'); return; }
+  pendingChar = await r.json();
+  renderCharPreview();
+}
+
+--- confirmChar ---
+async function confirmChar() {
+  if (!pendingChar) return alert('Сначала сгенерируйте или соберите персонажа');
+  const name = document.getElementById('cs-name').textContent;
+  const m = pendingMode, code = pendingCode, char = pendingChar;
+  char.name = name;
+  closeCharSelect();
+  if (m === 'join') await doJoin(code, name, char);
+  else await doCreate(name, char, m === 'solo');
+}
+
+--- doCreate ---
+async function doCreate(name, char, solo) {
+  try {
+    const resp = await fetch('/lobby/create', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({player_name: name, character: char})});
+    if (!resp.ok) {
+      const e = await resp.json().catch(() => ({}));
+      showErr('host-err', e.detail || 'Ошибка');
+      return;
+    }
+    const data = await resp.json();
+    mode = 'online';
+    sid = data.sid; token = data.token; myName = name;
+    localStorage.setItem('sid', sid);
+    localStorage.setItem('tok_' + sid, token);
+    localStorage.setItem('me_' + sid, name);
+    currentState = data.state;
+    if (solo) { await startOnline(); return; }
+    document.getElementById('room-code').textContent = data.code;
+    document.getElementById('waiting-box').classList.remove('hidden');
+    document.getElementById('start-btn').classList.remove('hidden');
+    updateWaitingList();
+    connectWS();
+  } catch (e) {
+    console.error(e);
+    showErr('host-err', 'Ошибка: ' + e.message);
+  }
+}
+
+--- doJoin ---
+async function doJoin(code, name, char) {
+  try {
+    const resp = await fetch('/lobby/join', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({code: code, player_name: name, character: char})});
+    if (!resp.ok) {
+      const e = await resp.json().catch(() => ({}));
+      showErr('join-err', e.detail || 'Ошибка');
+      return;
+    }
+    const data = await resp.json();
+    mode = 'online';
+    sid = data.sid; token = data.token; myName = name;
+    localStorage.setItem('sid', sid);
+    localStorage.setItem('tok_' + sid, token);
+    localStorage.setItem('me_' + sid, name);
+    currentState = data.state;
+    document.getElementById('waiting-box').classList.remove('hidden');
+    document.getElementById('room-code').textContent = code;
+    updateWaitingList();
+    connectWS();
+  } catch (e) {
+    console.error(e);
+    showErr('join-err', 'Ошибка: ' + e.message);
+  }
+}
