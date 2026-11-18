@@ -21,14 +21,20 @@ def _book_table(location):
 
 
 def roll_critical_injury(location="auto", damage_type="bullet", rng=None):
+    # Один бросок 2d6: сначала книжная таблица, иначе домарка по той же локации
     rng = rng or random
     roll = rng.randint(1, 6) + rng.randint(1, 6)
     table = _book_table(location)
     if table and table.get(str(roll)):
-        return {"roll": roll, "location": location, "name": table[str(roll)], "source": "book"}
-    house = base.roll_critical_injury(damage_type, rng=rng)
-    return {"roll": roll, "location": location, "name": house, "source": "house",
-            "note": "в книжной таблице извлечены только броски 2-6"}
+        key = "critical_injury_table_head" if location == "head" else "critical_injury_table_body"
+        prov = rules.provenance("combat", key)
+        return {"roll": roll, "location": location, "name": table[str(roll)],
+                "source": "book", "page": prov.get("page")}
+    name = _house_entry(location, damage_type, roll)
+    return {"roll": roll, "location": location,
+            "name": name or "Критическая травма: эффект уточняется",
+            "source": "house",
+            "note": "в книжной таблице " + str(location) + " нет броска " + str(roll)}
 
 
 def apply_damage(target, damage, weapon_key=None, crit=False, location="auto"):
@@ -62,3 +68,37 @@ def death_save(target, rng=None):
 
 def stabilize(target, medic_skill, rng=None):
     return base.stabilize(target, medic_skill, rng=rng)
+
+
+HEAD_WORDS = ("голов", "череп", "глаз", "мозг", "челюст", "оглуш", "контуз", "сознани")
+BODY_WORDS = ("рук", "ног", "палец", "рёбр", "ребр", "лёгк", "легк", "живот",
+              "артери", "ожог", "обугл", "кровотеч", "плеч")
+
+
+def _house_table(damage_type):
+    raw = getattr(base, "CRITICAL_INJURIES", {}) or {}
+    norm = {str(k).strip(): v for k, v in raw.items()}
+    return norm.get(str(damage_type).strip()) or norm.get("bullet") or {}
+
+
+def _house_entry(location, damage_type, roll):
+    table = _house_table(damage_type)
+    if not table:
+        return None
+    words = HEAD_WORDS if location == "head" else BODY_WORDS
+    pool = [v for v in table.values() if any(w in str(v).lower() for w in words)]
+    if not pool:
+        pool = list(table.values())
+    return pool[(roll - 2) % len(pool)] if pool else None
+
+
+def crit_table_coverage():
+    out = {}
+    for loc, key in (("head", "critical_injury_table_head"),
+                     ("body", "critical_injury_table_body")):
+        t = rules.get_optional("combat", key) or {}
+        have = sorted(int(k) for k in t.keys() if str(k).isdigit())
+        out[loc] = {"have": have,
+                    "missing": [r for r in range(2, 13) if r not in have],
+                    "verified": rules.verified("combat", key)}
+    return out
