@@ -135,22 +135,18 @@ def test_no_mojibake_in_chunks():
     assert bad == 0, "mojibake in chunks: run 09_fix_mojibake.py + 03_index.py"
  
 def test_wound_thresholds():
+    # Книга, стр.187: seriously при hp < ceil(max/2); mortally при hp < 1
     from backend.wounds import get_wound_state
 
-    # Здоров только при полном HP
     assert get_wound_state(10, 10) == "unharmed"
-
-    # Больше половины — легко ранен
     assert get_wound_state(9, 10) == "lightly"
-    assert get_wound_state(6, 10) == "lightly"
-
-    # Половина или меньше, но больше нуля — серьёзно ранен
-    assert get_wound_state(5, 10) == "seriously"
+    assert get_wound_state(5, 10) == "lightly"
+    assert get_wound_state(4, 10) == "seriously"
     assert get_wound_state(1, 10) == "seriously"
-
-    # Ноль и ниже — смертельно ранен
     assert get_wound_state(0, 10) == "mortally"
-    assert get_wound_state(-1, 10) == "mortally"
+    assert get_wound_state(-3, 10) == "mortally"
+    assert get_wound_state(20, 40) == "lightly"
+    assert get_wound_state(19, 40) == "seriously"
 
 
 def test_wound_penalties():

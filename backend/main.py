@@ -406,9 +406,9 @@ def chargen_endpoint(req: ChargenIn):
 
 
 @app.get("/creation/options")
-def creation_options(role: str = None):
+def creation_options(role: str = None, method: str = "complete_package"):
     from backend import creation
-    return creation.options(role)
+    return creation.options(role, method)
 
 
 @app.post("/creation/build")
@@ -1160,7 +1160,7 @@ def lobby_create(req: CreateLobby):
         "turn": 0, "threat": None,
         "order": [ch["name"]],
         "players": [ch],
-        "npcs": [dict(n) for n in DEFAULT_SCENARIO["npcs"]],
+        "npcs": [engine.book_npc(n) for n in DEFAULT_SCENARIO["npcs"]],
         "revealed_beats": [], "granted": [],
         "tokens": {ch["name"]: token},
         "status": "lobby",

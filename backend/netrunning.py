@@ -204,3 +204,19 @@ def get_net_ice(net_state):
     end_idx = start_idx + programs_per_floor
     
     return all_programs[start_idx:end_idx]
+
+
+def _mu_cost(prog):
+    raw = str((prog or {}).get("cost", "0"))
+    digits = "".join(ch for ch in raw if ch.isdigit())
+    return int(digits) if digits else 0
+
+
+def calculate_net_stats(character):
+    """Исправлено: MU считаются числами, а не строками."""
+    int_stat = (character.get("stats") or {}).get("INT", 5)
+    deck = get_cyberdeck(character.get("cyberdeck", "basic_deck")) or {"speed": 1, "slots": 4}
+    progs = [get_program(p) for p in character.get("programs", [])]
+    return {"speed": int_stat + int(deck.get("speed", 1)),
+            "mu_total": int(deck.get("slots", 4)),
+            "mu_used": sum(_mu_cost(p) for p in progs if p)}

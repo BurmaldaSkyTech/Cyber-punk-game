@@ -127,29 +127,21 @@
             <span>Потрачено: <b id="cb-spent">0</b> eb</span>
             <span>Остаток: <b id="cb-left">0</b> eb</span>
           </div>
-
           <div class="panel-section">Статы (пул <span id="cb-stat-pool"></span>)</div>
           <div id="cb-stats" class="panel-small"></div>
-
           <div class="panel-section">Навыки — прирост поверх шаблона (осталось <span id="cb-skill-pool"></span>)</div>
           <div id="cb-skills" class="panel-small" style="max-height:220px;overflow-y:auto"></div>
-
           <div class="panel-section">Боевые искусства</div>
           <div id="cb-martial" class="panel-small"></div>
-
           <div class="panel-section">Пакет роли (бесплатно)</div>
           <div id="cb-package" class="panel-small"></div>
-
           <div class="panel-section">Магазин</div>
           <div class="row" id="cb-tabs"></div>
           <div id="cb-shop" class="panel-small" style="max-height:260px;overflow-y:auto"></div>
-
           <div class="panel-section">Куплено</div>
           <div id="cb-cart" class="panel-small"></div>
-
           <div class="panel-section">Экипировать</div>
           <div class="row"><select id="cb-weapon"></select><select id="cb-armor"></select></div>
-
           <div class="row"><button onclick="cbBuild()">Собрать персонажа</button></div>
         </div>
 
@@ -327,6 +319,10 @@ let CB_CAT = 'weapon';
 const CAT_RU = {weapon:'Оружие', armor:'Броня', gear:'Снаряжение',
                 cyberware:'Импланты', drug:'Препараты', program:'Программы'};
 
+let CB_CAT = 'weapon';
+const CAT_RU = {weapon:'Оружие', armor:'Броня', gear:'Снаряжение',
+                cyberware:'Импланты', drug:'Препараты', program:'Программы'};
+
 async function cbLoad() {
   const role = document.getElementById('cb-role').value || '';
   const method = document.getElementById('cb-method').value || 'complete_package';
@@ -335,15 +331,14 @@ async function cbLoad() {
   const r = await fetch('/creation/options?' + qs.toString());
   if (!r.ok) { alert('Не удалось загрузить опции создания'); return; }
   CB = await r.json();
-  CB.spec = {
-    role: CB.role, method: CB.method,
-    stats: Object.assign({}, CB.template_stats),
-    skills: {}, purchases: [], martial_form: null,
-    weapon: CB.preset.weapon, armor: CB.preset.armor,
-  };
-  CB.skills.forEach(s => { if (s.baseline) CB.spec.skills[s.key] = s.baseline; });
+  CB.spec = {role: CB.role, method: CB.method,
+    stats: Object.assign({}, CB.template_stats), skills: {},
+    purchases: [], martial_form: null,
+    weapon: CB.preset.weapon, armor: CB.preset.armor};
+  CB.skills.forEach(x => { if (x.baseline) CB.spec.skills[x.key] = x.baseline; });
   document.getElementById('cb-method-note').textContent =
-    (METHOD_NOTE[CB.method] || '') + ' Очки навыков тратятся на прирост поверх шаблона.';
+    ((typeof METHOD_NOTE !== 'undefined' && METHOD_NOTE[CB.method]) || '') +
+    ' Очки навыков тратятся на прирост поверх шаблона.';
   document.getElementById('cb-tabs').innerHTML = Object.entries(CAT_RU).map(([k, v]) =>
     `<button class="secondary mini" onclick="cbTab('${k}')">${v}</button>`).join('');
   cbRender();
@@ -351,24 +346,26 @@ async function cbLoad() {
 
 function cbTab(c) { CB_CAT = c; cbRender(); }
 
-function cbOwned() {
-  return Array.from(new Set([...(CB.package || []), ...CB.spec.purchases]));
-}
+function cbOwned() { return Array.from(new Set([...(CB.package || []), ...CB.spec.purchases])); }
 function cbSpent() {
-  const map = {};
-  CB.catalog.forEach(i => map[i.key] = i.price);
-  return CB.spec.purchases.reduce((a, k) => a + (map[k] || 0), 0);
+  const m = {}; CB.catalog.forEach(i => m[i.key] = i.price);
+  return CB.spec.purchases.reduce((a, k) => a + (m[k] || 0), 0);
 }
 function cbDelta() {
   let d = 0;
   CB.skills.forEach(s => { d += Math.max(0, (CB.spec.skills[s.key] || 0) - s.baseline); });
   return d;
 }
+function cbMartial() {
+  const lvl = CB.spec.skills['martial_arts'] || 0;
+  return {required: lvl >= 1, forms: (CB.martial && CB.martial.forms) || [],
+          moves: [{key:'sweep',min_level:1},{key:'disarm',min_level:3},{key:'throw',min_level:5}]
+                 .filter(m => lvl >= m.min_level)};
+}
 
 function cbRender() {
   if (!CB) return;
-  const s = CB.spec;
-  const spent = cbSpent();
+  const s = CB.spec, spent = cbSpent();
   document.getElementById('cb-budget').textContent = CB.budget;
   document.getElementById('cb-spent').textContent = spent;
   document.getElementById('cb-left').textContent = CB.budget - spent;
@@ -403,9 +400,9 @@ function cbRender() {
         <button class="secondary mini" onclick="cbSkill('${x.key}',1)">+</button></span>`).join('');
   }
 
-  const ma = cat_martial();
+  const ma = cbMartial();
   document.getElementById('cb-martial').innerHTML = !ma.required
-    ? '<span style="color:#888">Навык martial_arts = 0 — форма не требуется</span>'
+    ? '<span style="color:#888">martial_arts = 0 — форма не требуется</span>'
     : `<select onchange="CB.spec.martial_form=this.value">
          <option value="">— выбрать форму —</option>
          ${ma.forms.map(f => `<option ${s.martial_form===f?'selected':''}>${f}</option>`).join('')}
@@ -429,32 +426,20 @@ function cbRender() {
         <button class="secondary mini" onclick="cbSell('${k}')">×</button></span>`).join('')
     : '<span style="color:#888">Ничего не куплено</span>';
 
-  const weapons = owned.filter(k => (CB.catalog.find(i=>i.key===k)||{}).category === 'weapon');
-  const armors = owned.filter(k => (CB.catalog.find(i=>i.key===k)||{}).category === 'armor');
-  document.getElementById('cb-weapon').innerHTML = weapons.map(w => `<option ${w===s.weapon?'selected':''}>${w}</option>`).join('');
-  document.getElementById('cb-armor').innerHTML = armors.map(a => `<option ${a===s.armor?'selected':''}>${a}</option>`).join('');
-}
-
-function cat_martial() {
-  const lvl = CB.spec.skills['martial_arts'] || 0;
-  const forms = (CB.martial && CB.martial.forms) || [];
-  const all = (CB.martial && CB.martial.moves) || [];
-  return {required: lvl >= 1, forms,
-          moves: [{key:'sweep',min_level:1},{key:'disarm',min_level:3},{key:'throw',min_level:5}]
-                 .filter(m => lvl >= m.min_level)};
+  const cat = k => (CB.catalog.find(i => i.key === k) || {}).category;
+  document.getElementById('cb-weapon').innerHTML =
+    owned.filter(k => cat(k) === 'weapon').map(w => `<option ${w===s.weapon?'selected':''}>${w}</option>`).join('');
+  document.getElementById('cb-armor').innerHTML =
+    owned.filter(k => cat(k) === 'armor').map(a => `<option ${a===s.armor?'selected':''}>${a}</option>`).join('');
 }
 
 function cbBuy(k) {
   const item = CB.catalog.find(i => i.key === k);
   if (!item) return;
   if (cbSpent() + item.price > CB.budget) { alert('Не хватает eb'); return; }
-  CB.spec.purchases.push(k);
-  cbRender();
+  CB.spec.purchases.push(k); cbRender();
 }
-function cbSell(k) {
-  CB.spec.purchases = CB.spec.purchases.filter(x => x !== k);
-  cbRender();
-}
+function cbSell(k) { CB.spec.purchases = CB.spec.purchases.filter(x => x !== k); cbRender(); }
 
 async function cbRollStats() {
   const r = await fetch('/creation/roll_stats', {method:'POST'});
@@ -463,8 +448,7 @@ async function cbRollStats() {
 
 function cbStat(k, d) {
   if (CB.stat_pool === null || CB.stat_pool === undefined) return;
-  const s = CB.spec.stats;
-  const used = Object.values(s).reduce((a,b)=>a+b,0);
+  const s = CB.spec.stats, used = Object.values(s).reduce((a,b)=>a+b,0);
   const nv = (s[k]||0) + d;
   if (nv < CB.stat_min || nv > CB.stat_max) return;
   if (d > 0 && used >= CB.stat_pool) return;
@@ -474,8 +458,7 @@ function cbStat(k, d) {
 function cbSkill(k, d) {
   if (CB.skill_pool === null || CB.skill_pool === undefined) return;
   const base = (CB.skills.find(x => x.key === k) || {}).baseline || 0;
-  const cur = CB.spec.skills[k] || 0;
-  const nv = cur + d;
+  const nv = (CB.spec.skills[k] || 0) + d;
   if (nv < base || nv > CB.skill_max) return;
   if (d > 0 && cbDelta() >= CB.skill_pool) return;
   CB.spec.skills[k] = nv; cbRender();

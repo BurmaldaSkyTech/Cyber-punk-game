@@ -12,6 +12,20 @@ from .wounds import (apply_damage, death_save, get_wound_state,
 from . import martial
 from . import netrunning
 
+# --- книжные ранения перекрывают домашние (см. wounds_book) ---
+from backend import wounds_book as _wb
+from backend import wounds as _wounds_mod
+
+apply_damage = _wb.apply_damage
+get_wound_state = _wb.get_wound_state
+get_wound_penalty = _wb.get_wound_penalty
+death_save = _wb.death_save
+_wounds_mod.apply_damage = _wb.apply_damage
+_wounds_mod.get_wound_state = _wb.get_wound_state
+_wounds_mod.get_wound_penalty = _wb.get_wound_penalty
+_wounds_mod.death_save = _wb.death_save
+
+
 
 # ============================================================
 # ЗАГРУЗКА ПОЛНЫХ ДАННЫХ ИЗ ФАЙЛОВ
@@ -462,7 +476,7 @@ def resolve_check(state, actor, judge):
             if abl:
                 mech["armor_ablation"] = abl
             if total_damage > 0:
-                dr = (apply_damage(target, total_damage, weapon_key=wkey, crit=crit)
+                dr = (apply_damage(target, total_damage, weapon_key=wkey, crit=crit, location=location)
                       if _ACCEPTS_CRIT else apply_damage(target, total_damage, weapon_key=wkey))
                 target["hp"] = dr["hp"]
                 target["wound"] = dr["wound_state"]
@@ -522,7 +536,11 @@ def _npc_attack_roll(npc, weapon, wkey, target_player):
         if abl:
             res["armor_ablation"] = abl
         if net > 0:
-            dr = apply_damage(target_player, net, weapon_key=wkey)
+            _npc_crit = sum(1 for f in _faces if f == 6) >= combat_rules.crit_trigger()
+            _bonus = combat_rules.crit_bonus() if _npc_crit else 0
+            res["critical_success"] = _npc_crit
+            res["bonus_damage"] = _bonus
+            dr = apply_damage(target_player, net + _bonus, weapon_key=wkey, crit=_npc_crit)
             target_player["hp"] = dr["hp"]
             target_player["wound"] = dr["wound_state"]
             target_player["wound_penalty"] = dr["penalty"]
@@ -580,7 +598,11 @@ def _npc_attack_roll(npc, weapon, wkey, target_player):
         net = max(0, dmg - sp)
         res.update({"damage": dmg, "armor_sp": sp, "net_damage": net})
         if net > 0:
-            dr = apply_damage(target_player, net, weapon_key=wkey)
+            _npc_crit = sum(1 for f in _faces if f == 6) >= combat_rules.crit_trigger()
+            _bonus = combat_rules.crit_bonus() if _npc_crit else 0
+            res["critical_success"] = _npc_crit
+            res["bonus_damage"] = _bonus
+            dr = apply_damage(target_player, net + _bonus, weapon_key=wkey, crit=_npc_crit)
             target_player["hp"] = dr["hp"]
             target_player["wound"] = dr["wound_state"]
             target_player["wound_penalty"] = dr["penalty"]
@@ -687,3 +709,21 @@ def refresh_rules_tables():
 
 
 refresh_rules_tables()
+
+
+def book_npc(n):
+    """NPC с книжным HP и боевыми stats/skills (для встречных бросков)."""
+    from backend import rules_tables
+    d = dict(n)
+    hostile = _is_hostile(d)
+    d.setdefault("stats", {"REF": 6, "DEX": 5, "BODY": 6, "WILL": 5} if hostile
+                 else {"REF": 4, "DEX": 4, "BODY": 4, "WILL": 5})
+    d.setdefault("skills", {"handgun": 4, "evasion": 3} if hostile
+                 else {"handgun": 2, "evasion": 2})
+    new_max = int(rules_tables.max_hp(d["stats"]))
+    old_max = int(d.get("max_hp") or 0)
+    if old_max != new_max and new_max > 0:
+        ratio = (int(d.get("hp", old_max)) / old_max) if old_max else 1.0
+        d["max_hp"] = new_max
+        d["hp"] = max(0, min(new_max, int(round(new_max * ratio))))
+    return d
