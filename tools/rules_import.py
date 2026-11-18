@@ -53,6 +53,9 @@ def conflicts(payload, key):
             if tail and tail in (d.get("symbol") or "").lower() and d.get("book") is not None]
 
 
+NULLABLE = {"stat_pool_streetrat", "stat_pool_edgerunner", "skill_pool_streetrat"}
+
+
 def check(e, payload):
     p = []
     page, quote, val, key = e.get("page"), e.get("quote") or "", e.get("value"), e.get("key")
@@ -62,18 +65,23 @@ def check(e, payload):
         p.append("нет quote")
     if len(quote) > 240:
         p.append("длинная quote")
-    if val is None:
+    if val is None and key not in NULLABLE:
         p.append("value=null")
-    if key in NUMERIC and not isinstance(val, (int, float)):
+    if key in NUMERIC and val is not None and not isinstance(val, (int, float)):
         p.append("ожидалось число")
     if quote and isinstance(val, (int, float, str)):
-        ok = formula_ok(val, quote) if key in FORMULA else in_quote(val, quote)
+        if key in FORMULA:
+            ok = formula_ok(val, quote)
+        elif key in RULE_TEXT:
+            ok = rule_text_ok(val, quote)
+        else:
+            ok = in_quote(val, quote)
         if not ok:
             p.append("цитата не подтверждает значение")
     if e.get("confidence") == "low":
         p.append("confidence=low")
     for d in conflicts(payload, key):
-        if d.get("book") != val:
+        if d.get("book") != val and val is not None:
             p.append(f"КОНФЛИКТ {d.get('symbol')}={d.get('book')}")
     return p
 
@@ -86,8 +94,11 @@ def main():
         return
     payload = json.loads(pathlib.Path(args[0]).read_text(encoding="utf-8"))
     ok = bad = 0
-    for e in payload.get("entries", []):
+    for raw in payload.get("entries", []):
+        e = {str(k).strip(): v for k, v in raw.items()}
         val = normalize_entry(e.get("pack"), e.get("key"), e.get("value"))
+        if isinstance(val, list):
+            val = [str(x).strip() for x in val]
         probs = check(dict(e, value=val), payload)
         if probs:
             bad += 1
@@ -105,3 +116,29 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+RULE_TEXT = {"armor_ablation", "critical_injury_trigger", "rof_rules",
+             "melee_opposed_by", "ranged_defense", "autofire_rules",
+             "wound_states", "wound_penalties"}
+STOP = {"the", "and", "for", "with", "that", "this", "from", "your", "you",
+        "are", "can", "any", "all", "its", "into", "upon", "when", "whenever",
+        "each", "single", "their", "they", "them", "then", "than", "not",
+        "but", "also", "may", "must", "have", "has", "was", "were", "will",
+        "would", "should", "could", "how", "many", "times", "amount"}
+
+
+def rule_text_ok(v, q):
+    q = norm(q)
+    nums = re.findall(r"\d+", str(v))
+    if nums and not all(n in q for n in nums):
+        return False
+    for i in re.findall(r"\b[A-Z]{2,}\b", str(v)):
+        low = i.lower()
+        if low in q or any(x in q for x in SYN.get(low, ())):
+            continue
+        return False
+    words = [w.lower() for w in re.findall(r"[A-Za-z]{4,}", str(v))
+             if w.lower() not in STOP]
+    if not words:
+        return True
+    return any(w[:5] in q for w in words)

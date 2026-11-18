@@ -1,5 +1,4 @@
-"""Сверяет код с книгой через те же отображения, что и rules_tables.
-Ложных срабатываний на структуру penalty и категории ближнего боя нет."""
+"""Сверка кода с книгой. Домашние предметы помечаются, а не считаются расхождением."""
 import pathlib
 import sys
 
@@ -7,8 +6,8 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from backend import creation, engine, rules
 from tools.rules_normalize import MELEE_MAP
 
-ARMOR_ALIASES = {"bodyplate": "metalgear"}
 problems = []
+house = []
 
 
 def check_dv():
@@ -27,11 +26,13 @@ def check_armor():
         problems.append("[UNVERIFIED] armor.table")
         return
     for k, v in engine.ARMOR.items():
-        bk = ARMOR_ALIASES.get(k, k)
-        if bk not in book:
+        if v.get("house_item"):
+            house.append(f"armor.{k} — домашний предмет, в книге нет")
+            continue
+        if k not in book:
             problems.append(f"[NEEDS_EXTRACT] armor.{k}")
             continue
-        b = book[bk]
+        b = book[k]
         if "sp" in b and v.get("sp") != b["sp"]:
             problems.append(f"[MISMATCH] armor.{k}.sp: код={v.get('sp')} книга={b['sp']}")
         pen = b.get("penalty")
@@ -62,15 +63,13 @@ if __name__ == "__main__":
     check_dv()
     check_armor()
     check_weapons()
-    lim = creation.limits()
-    for key, val in [("stat_pool_edgerunner", lim["stat_pool"]),
-                     ("skill_pool_edgerunner", lim["skill_pool"]),
-                     ("skill_max_at_creation", lim["skill_max"]),
-                     ("hp_formula", None)]:
+    for key in ("hp_formula", "skill_pool_edgerunner", "skill_max_at_creation"):
         if not rules.provenance("creation", key)["verified"]:
-            problems.append(f"[HOUSE] creation.{key}" + (f"={val}" if val is not None else ""))
+            problems.append(f"[HOUSE] creation.{key}")
     print("=== RULES AUDIT ===")
     for p in problems:
         print(p)
+    for h in house:
+        print(f"[HOUSE-ITEM] {h}")
     print(f"итого проблем: {len(problems)}")
     sys.exit(1 if problems else 0)

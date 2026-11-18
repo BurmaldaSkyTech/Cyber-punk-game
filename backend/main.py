@@ -1504,3 +1504,23 @@ def rules_migrate_hp(req: dict):
                 changed.append({"sid": sid, "name": p["name"], "old": old, "new": new})
         persist(st)
     return {"count": len(changed), "changed": changed}    
+
+@app.get("/creation/options")
+def creation_options(role: str = None, method: str = "complete_package"):
+    from backend import creation
+    return creation.options(role, method)
+
+
+@app.post("/creation/roll_stats")
+def creation_roll_stats():
+    from backend import creation
+    return creation.roll_stats()
+
+
+@app.post("/creation/build")
+def creation_build(spec: dict):
+    from backend import creation
+    try:
+        return creation.build(spec)
+    except ValueError as e:
+        raise HTTPException(400, str(e))

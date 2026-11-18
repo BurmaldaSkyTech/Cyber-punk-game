@@ -119,24 +119,36 @@
               <option value="edgerunner">Edgerunner — бросок STAT + 86 Skill</option>
               <option value="streetrat">Streetrat — шаблон</option>
             </select>
+            <select id="cb-role" onchange="cbLoad()"></select>
           </div>
-          <div class="row"><select id="cb-role" onchange="cbLoad()"></select></div>
           <div id="cb-method-note" class="book-note"></div>
+          <div class="turnbar" style="font-size:0.95em">
+            <span>Бюджет: <b id="cb-budget">0</b> eb</span>
+            <span>Потрачено: <b id="cb-spent">0</b> eb</span>
+            <span>Остаток: <b id="cb-left">0</b> eb</span>
+          </div>
 
           <div class="panel-section">Статы (пул <span id="cb-stat-pool"></span>)</div>
           <div id="cb-stats" class="panel-small"></div>
 
-          <div class="panel-section">Навыки (пул <span id="cb-skill-pool"></span>)</div>
-          <div id="cb-skills" class="panel-small"></div>
+          <div class="panel-section">Навыки — прирост поверх шаблона (осталось <span id="cb-skill-pool"></span>)</div>
+          <div id="cb-skills" class="panel-small" style="max-height:220px;overflow-y:auto"></div>
 
-          <div class="panel-section">Оружие / Броня</div>
+          <div class="panel-section">Боевые искусства</div>
+          <div id="cb-martial" class="panel-small"></div>
+
+          <div class="panel-section">Пакет роли (бесплатно)</div>
+          <div id="cb-package" class="panel-small"></div>
+
+          <div class="panel-section">Магазин</div>
+          <div class="row" id="cb-tabs"></div>
+          <div id="cb-shop" class="panel-small" style="max-height:260px;overflow-y:auto"></div>
+
+          <div class="panel-section">Куплено</div>
+          <div id="cb-cart" class="panel-small"></div>
+
+          <div class="panel-section">Экипировать</div>
           <div class="row"><select id="cb-weapon"></select><select id="cb-armor"></select></div>
-
-          <div class="panel-section">Снаряжение (до <span id="cb-gear-limit"></span>)</div>
-          <div id="cb-gear" class="panel-small"></div>
-
-          <div class="panel-section">Программы (до <span id="cb-prog-limit"></span>)</div>
-          <div id="cb-programs" class="panel-small"></div>
 
           <div class="row"><button onclick="cbBuild()">Собрать персонажа</button></div>
         </div>
@@ -311,6 +323,10 @@ async function rollChar() {
   renderCharPreview();
 }
 
+let CB_CAT = 'weapon';
+const CAT_RU = {weapon:'Оружие', armor:'Броня', gear:'Снаряжение',
+                cyberware:'Импланты', drug:'Препараты', program:'Программы'};
+
 async function cbLoad() {
   const role = document.getElementById('cb-role').value || '';
   const method = document.getElementById('cb-method').value || 'complete_package';
@@ -321,38 +337,53 @@ async function cbLoad() {
   CB = await r.json();
   CB.spec = {
     role: CB.role, method: CB.method,
-    stats: Object.assign({}, CB.preset.stats),
-    skills: Object.assign({}, CB.preset.skills),
-    gear: (CB.preset.gear || []).slice(),
+    stats: Object.assign({}, CB.template_stats),
+    skills: {}, purchases: [], martial_form: null,
     weapon: CB.preset.weapon, armor: CB.preset.armor,
-    programs: (CB.preset.programs || []).slice(),
   };
-  document.getElementById('cb-method-note').textContent = METHOD_NOTE[CB.method] || '';
-  document.getElementById('cb-weapon').innerHTML =
-    (CB.weapons || []).map(w => `<option ${w===CB.spec.weapon?'selected':''}>${w}</option>`).join('');
-  document.getElementById('cb-armor').innerHTML =
-    (CB.armors || []).map(a => `<option ${a===CB.spec.armor?'selected':''}>${a}</option>`).join('');
-  document.getElementById('cb-gear-limit').textContent = CB.gear_limit;
-  document.getElementById('cb-prog-limit').textContent = CB.prog_limit;
+  CB.skills.forEach(s => { if (s.baseline) CB.spec.skills[s.key] = s.baseline; });
+  document.getElementById('cb-method-note').textContent =
+    (METHOD_NOTE[CB.method] || '') + ' Очки навыков тратятся на прирост поверх шаблона.';
+  document.getElementById('cb-tabs').innerHTML = Object.entries(CAT_RU).map(([k, v]) =>
+    `<button class="secondary mini" onclick="cbTab('${k}')">${v}</button>`).join('');
   cbRender();
+}
+
+function cbTab(c) { CB_CAT = c; cbRender(); }
+
+function cbOwned() {
+  return Array.from(new Set([...(CB.package || []), ...CB.spec.purchases]));
+}
+function cbSpent() {
+  const map = {};
+  CB.catalog.forEach(i => map[i.key] = i.price);
+  return CB.spec.purchases.reduce((a, k) => a + (map[k] || 0), 0);
+}
+function cbDelta() {
+  let d = 0;
+  CB.skills.forEach(s => { d += Math.max(0, (CB.spec.skills[s.key] || 0) - s.baseline); });
+  return d;
 }
 
 function cbRender() {
   if (!CB) return;
   const s = CB.spec;
+  const spent = cbSpent();
+  document.getElementById('cb-budget').textContent = CB.budget;
+  document.getElementById('cb-spent').textContent = spent;
+  document.getElementById('cb-left').textContent = CB.budget - spent;
 
   if (CB.stat_pool === null || CB.stat_pool === undefined) {
     document.getElementById('cb-stat-pool').textContent =
       CB.method === 'streetrat' ? 'шаблон' : 'бросок 1d10';
     document.getElementById('cb-stats').innerHTML =
-      (CB.stats || []).map(k => `<span class="stat-chip"><b>${k}</b> ${s.stats[k]}</span>`).join('') +
+      CB.stats.map(k => `<span class="stat-chip"><b>${k}</b> ${s.stats[k]}</span>`).join('') +
       (CB.method === 'edgerunner'
-        ? `<button class="secondary mini" style="margin-left:8px" onclick="cbRollStats()">🎲 Бросить STAT</button>`
-        : '');
+        ? `<button class="secondary mini" onclick="cbRollStats()">🎲 Бросить STAT</button>` : '');
   } else {
     const used = Object.values(s.stats).reduce((a,b)=>a+b,0);
-    document.getElementById('cb-stat-pool').textContent = (CB.stat_pool - used);
-    document.getElementById('cb-stats').innerHTML = (CB.stats || []).map(k =>
+    document.getElementById('cb-stat-pool').textContent = CB.stat_pool - used;
+    document.getElementById('cb-stats').innerHTML = CB.stats.map(k =>
       `<span class="stat-chip"><b>${k}</b> ${s.stats[k]}
         <button class="secondary mini" onclick="cbStat('${k}',-1)">−</button>
         <button class="secondary mini" onclick="cbStat('${k}',1)">+</button></span>`).join('');
@@ -360,37 +391,81 @@ function cbRender() {
 
   if (CB.skill_pool === null || CB.skill_pool === undefined) {
     document.getElementById('cb-skill-pool').textContent = 'шаблон';
-    document.getElementById('cb-skills').innerHTML = (CB.skills || []).map(k =>
-      `<span class="stat-chip"><b>${k}</b> ${s.skills[k]||0}</span>`).join('');
+    document.getElementById('cb-skills').innerHTML = CB.skills
+      .filter(x => s.skills[x.key])
+      .map(x => `<span class="stat-chip"><b>${x.key}</b> ${s.skills[x.key]}</span>`).join('');
   } else {
-    const used = Object.values(s.skills).reduce((a,b)=>a+b,0);
-    document.getElementById('cb-skill-pool').textContent = (CB.skill_pool - used);
-    document.getElementById('cb-skills').innerHTML = (CB.skills || []).map(k =>
-      `<span class="stat-chip"><b>${k}</b> ${s.skills[k]||0}
-        <button class="secondary mini" onclick="cbSkill('${k}',-1)">−</button>
-        <button class="secondary mini" onclick="cbSkill('${k}',1)">+</button></span>`).join('');
+    document.getElementById('cb-skill-pool').textContent = CB.skill_pool - cbDelta();
+    document.getElementById('cb-skills').innerHTML = CB.skills.map(x =>
+      `<span class="stat-chip"><b>${x.key}</b> [${x.stat}] ${s.skills[x.key]||0}
+        <span style="color:#666">база ${x.baseline}</span>
+        <button class="secondary mini" onclick="cbSkill('${x.key}',-1)">−</button>
+        <button class="secondary mini" onclick="cbSkill('${x.key}',1)">+</button></span>`).join('');
   }
 
-  document.getElementById('cb-gear').innerHTML = (CB.gear || []).map(g =>
-    `<label style="display:inline-block;margin:2px 6px"><input type="checkbox" style="width:auto"
-      ${s.gear.includes(g)?'checked':''} onchange="cbGear('${g}',this.checked)"> ${g}</label>`).join('');
-  document.getElementById('cb-programs').innerHTML = (CB.programs || []).map(p =>
-    `<label style="display:inline-block;margin:2px 6px"><input type="checkbox" style="width:auto"
-      ${s.programs.includes(p)?'checked':''} onchange="cbProg('${p}',this.checked)"> ${p}</label>`).join('');
+  const ma = cat_martial();
+  document.getElementById('cb-martial').innerHTML = !ma.required
+    ? '<span style="color:#888">Навык martial_arts = 0 — форма не требуется</span>'
+    : `<select onchange="CB.spec.martial_form=this.value">
+         <option value="">— выбрать форму —</option>
+         ${ma.forms.map(f => `<option ${s.martial_form===f?'selected':''}>${f}</option>`).join('')}
+       </select>
+       <div style="margin-top:6px;color:#7fbf7f">Приёмы: ${ma.moves.map(m=>m.key).join(', ') || '—'}</div>`;
+
+  document.getElementById('cb-package').innerHTML =
+    (CB.package || []).map(k => `<span class="stat-chip">${k}</span>`).join('');
+
+  const owned = cbOwned();
+  document.getElementById('cb-shop').innerHTML = CB.catalog
+    .filter(i => i.category === CB_CAT && !owned.includes(i.key))
+    .map(i => `<div style="display:flex;gap:8px;align-items:center;margin:3px 0">
+        <span style="flex:1">${i.name}${i.damage?' · '+i.damage:''}${i.sp?' · SP'+i.sp:''}${i.hl?' · HL'+i.hl:''}</span>
+        <span style="color:${i.source==='book'?'#7fbf7f':'#c9a227'}">${i.price} eb</span>
+        <button class="secondary mini" onclick="cbBuy('${i.key}')">Купить</button>
+      </div>`).join('') || '<span style="color:#888">Всё куплено</span>';
+
+  document.getElementById('cb-cart').innerHTML = s.purchases.length
+    ? s.purchases.map(k => `<span class="stat-chip">${k}
+        <button class="secondary mini" onclick="cbSell('${k}')">×</button></span>`).join('')
+    : '<span style="color:#888">Ничего не куплено</span>';
+
+  const weapons = owned.filter(k => (CB.catalog.find(i=>i.key===k)||{}).category === 'weapon');
+  const armors = owned.filter(k => (CB.catalog.find(i=>i.key===k)||{}).category === 'armor');
+  document.getElementById('cb-weapon').innerHTML = weapons.map(w => `<option ${w===s.weapon?'selected':''}>${w}</option>`).join('');
+  document.getElementById('cb-armor').innerHTML = armors.map(a => `<option ${a===s.armor?'selected':''}>${a}</option>`).join('');
+}
+
+function cat_martial() {
+  const lvl = CB.spec.skills['martial_arts'] || 0;
+  const forms = (CB.martial && CB.martial.forms) || [];
+  const all = (CB.martial && CB.martial.moves) || [];
+  return {required: lvl >= 1, forms,
+          moves: [{key:'sweep',min_level:1},{key:'disarm',min_level:3},{key:'throw',min_level:5}]
+                 .filter(m => lvl >= m.min_level)};
+}
+
+function cbBuy(k) {
+  const item = CB.catalog.find(i => i.key === k);
+  if (!item) return;
+  if (cbSpent() + item.price > CB.budget) { alert('Не хватает eb'); return; }
+  CB.spec.purchases.push(k);
+  cbRender();
+}
+function cbSell(k) {
+  CB.spec.purchases = CB.spec.purchases.filter(x => x !== k);
+  cbRender();
 }
 
 async function cbRollStats() {
   const r = await fetch('/creation/roll_stats', {method:'POST'});
-  if (!r.ok) { alert('Бросок недоступен'); return; }
-  CB.spec.stats = await r.json();
-  cbRender();
+  if (r.ok) { CB.spec.stats = await r.json(); cbRender(); }
 }
 
 function cbStat(k, d) {
   if (CB.stat_pool === null || CB.stat_pool === undefined) return;
   const s = CB.spec.stats;
   const used = Object.values(s).reduce((a,b)=>a+b,0);
-  const nv = (s[k] || 0) + d;
+  const nv = (s[k]||0) + d;
   if (nv < CB.stat_min || nv > CB.stat_max) return;
   if (d > 0 && used >= CB.stat_pool) return;
   s[k] = nv; cbRender();
@@ -398,32 +473,18 @@ function cbStat(k, d) {
 
 function cbSkill(k, d) {
   if (CB.skill_pool === null || CB.skill_pool === undefined) return;
-  const s = CB.spec.skills;
-  const used = Object.values(s).reduce((a,b)=>a+b,0);
-  const nv = (s[k]||0) + d;
-  if (nv < 0 || nv > CB.skill_max) return;
-  if (d > 0 && used >= CB.skill_pool) return;
-  s[k] = nv; cbRender();
-}
-
-function cbGear(g, on) {
-  const s = CB.spec.gear;
-  if (on && !s.includes(g) && s.length < CB.gear_limit) s.push(g);
-  if (!on) CB.spec.gear = s.filter(x => x !== g);
-  cbRender();
-}
-
-function cbProg(p, on) {
-  const s = CB.spec.programs;
-  if (on && !s.includes(p) && s.length < CB.prog_limit) s.push(p);
-  if (!on) CB.spec.programs = s.filter(x => x !== p);
-  cbRender();
+  const base = (CB.skills.find(x => x.key === k) || {}).baseline || 0;
+  const cur = CB.spec.skills[k] || 0;
+  const nv = cur + d;
+  if (nv < base || nv > CB.skill_max) return;
+  if (d > 0 && cbDelta() >= CB.skill_pool) return;
+  CB.spec.skills[k] = nv; cbRender();
 }
 
 async function cbBuild() {
   if (!CB) return;
-  CB.spec.weapon = document.getElementById('cb-weapon').value;
-  CB.spec.armor = document.getElementById('cb-armor').value;
+  CB.spec.weapon = document.getElementById('cb-weapon').value || CB.spec.weapon;
+  CB.spec.armor = document.getElementById('cb-armor').value || CB.spec.armor;
   CB.spec.name = document.getElementById('cs-name').textContent;
   CB.spec.method = CB.method;
   const r = await fetch('/creation/build', {method:'POST', headers:{'Content-Type':'application/json'},

@@ -53,7 +53,8 @@ def test_resolve_attack(monkeypatch):
     judge = {"action_type": "attack_ranged", "skill": "handgun", "dv_key": "difficult",
              "weapon": "medium_pistol", "target": "g1", "_text": "shoot the guard"}
     m = engine.resolve_check(state, actor, judge)
-    assert m["dv"] == 15 and m["total"] == 16 and m["success"]
+    # DV из книжной таблицы дистанций: Pistol 0-6м = 13
+    assert m["dv"] == 13 and m["total"] == 16 and m["success"]
     assert m["armor_sp"] == 7 and m["net_damage"] == 3
     assert state["npcs"][0]["hp"] == 17
 

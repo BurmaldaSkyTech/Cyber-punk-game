@@ -1,0 +1,94 @@
+# === METHODS ===
+METHODS = ("streetrat", "edgerunner", "complete_package")
+
+
+def methods():
+    out = {}
+    for m in METHODS:
+        out[m] = {
+            "stat_pool": rules.value_or("creation", f"stat_pool_{m}", HOUSE["stat_pool_edgerunner"]),
+            "skill_pool": rules.value_or("creation", f"skill_pool_{m}", HOUSE["skill_pool_edgerunner"]),
+            "stat_verified": rules.verified("creation", f"stat_pool_{m}"),
+            "skill_verified": rules.verified("creation", f"skill_pool_{m}"),
+        }
+    return out
+
+
+def roll_stats():
+    """Edgerunner: 1d10 на каждый STAT (стр.78), обрезка по книжным 2..8."""
+    lo, hi = int(_book("stat_min")), int(_book("stat_max"))
+    return {k: max(lo, min(hi, random.randint(1, 10))) for k in _book("stat_list")}
+# === LIMITS ===
+def limits(method="complete_package"):
+    m = method if method in METHODS else "complete_package"
+    info = methods()[m]
+    return {
+        "method": m,
+        "stat_min": int(_book("stat_min")), "stat_max": int(_book("stat_max")),
+        "stat_pool": info["stat_pool"],
+        "skill_pool": info["skill_pool"],
+        "skill_max": int(_book("skill_max_at_creation")),
+        "gear_limit": int(HOUSE["gear_limit"]), "prog_limit": int(HOUSE["prog_limit"]),
+    }
+# === OPTIONS ===
+def options(role=None, method="complete_package"):
+    p, r = preset(role)
+    lim = limits(method)
+    skill_list = _book("skill_list")
+    return {
+        "role": r, "roles": _book("roles"),
+        "method": lim["method"], "methods": methods(),
+        "stats": _book("stat_list"),
+        "stat_min": lim["stat_min"], "stat_max": lim["stat_max"], "stat_pool": lim["stat_pool"],
+        "skills": [s["key"] if isinstance(s, dict) else s for s in skill_list],
+        "skill_stat": {s["key"]: s["stat"] for s in skill_list if isinstance(s, dict)},
+        "skill_pool": lim["skill_pool"], "skill_max": lim["skill_max"],
+        "gear": _book("gear"), "gear_limit": lim["gear_limit"],
+        "weapons": _book("weapons"), "armors": _book("armors"),
+        "programs": _book("programs"), "prog_limit": lim["prog_limit"],
+        "preset": p,
+        "sources": _sources(["stat_pool_streetrat", "stat_pool_edgerunner",
+                             "stat_pool_complete_package", "skill_pool_edgerunner",
+                             "skill_max_at_creation", "hp_formula"]),
+    }
+# === BUILD ===
+def build(spec):
+    method = spec.get("method", "complete_package")
+    lim = limits(method)
+    role = normalize_role(spec.get("role"))
+    stat_keys = _book("stat_list")
+
+    if lim["stat_pool"] is None:
+        base = preset(role)[0]["stats"] if method == "streetrat" else roll_stats()
+        stats = {k: int(base.get(k, lim["stat_min"])) for k in stat_keys}
+    else:
+        stats = {k: int(spec.get("stats", {}).get(k, lim["stat_min"])) for k in stat_keys}
+        if any(not (lim["stat_min"] <= v <= lim["stat_max"]) for v in stats.values()):
+            raise ValueError(f"статы вне диапазона {lim['stat_min']}..{lim['stat_max']}")
+        if sum(stats.values()) > lim["stat_pool"]:
+            raise ValueError(f"пул статов превышен (макс {lim['stat_pool']})")
+
+    allowed = {s["key"] if isinstance(s, dict) else s for s in _book("skill_list")}
+    if lim["skill_pool"] is None:
+        skills = {k: v for k, v in preset(role)[0]["skills"].items() if k in allowed}
+    else:
+        skills = {k: int(v) for k, v in (spec.get("skills") or {}).items()
+                  if int(v) > 0 and k in allowed}
+        if any(v > lim["skill_max"] for v in skills.values()):
+            raise ValueError(f"навык выше лимита создания {lim['skill_max']}")
+        if sum(skills.values()) > lim["skill_pool"]:
+            raise ValueError(f"пул навыков превышен (макс {lim['skill_pool']})")
+
+    gear = [g for g in (spec.get("gear") or []) if g in _book("gear")][:lim["gear_limit"]]
+    weapon = spec.get("weapon") if spec.get("weapon") in _book("weapons") else "medium_pistol"
+    armor = spec.get("armor") if spec.get("armor") in _book("armors") else "leathers"
+    programs = [p for p in (spec.get("programs") or []) if p in _book("programs")][:lim["prog_limit"]]
+    cyber = ["Neural Link"]
+    if role == "Netrunner":
+        cyber.append("Interface Plugs")
+        if "cyberdeck" not in gear:
+            gear.append("cyberdeck")
+    ch = _finalize(spec.get("name") or random.choice(HANDLES), role, stats, skills,
+                   weapon, armor, gear, cyber, programs)
+    ch["creation_method"] = lim["method"]
+    return ch

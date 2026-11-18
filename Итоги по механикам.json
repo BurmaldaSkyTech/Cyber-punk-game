@@ -1,0 +1,867 @@
+{
+
+"book": "Cyberpunk RED Core Rulebook",
+
+"extractor": "grok",
+
+"entries": [
+
+{
+
+"pack": "creation",
+
+"key": "stat_pool_streetrat",
+
+"value": null,
+
+"page": 74,
+
+"quote": "When using The Streetrat Option, you'll roll 1d10 and then copy the numbers adjacent to the result of that roll onto your Character Sheet. You may not move your STATs around",
+
+"confidence": "high"
+
+},
+
+{
+
+"pack": "creation",
+
+"key": "stat_pool_edgerunner",
+
+"value": null,
+
+"page": 78,
+
+"quote": "When using the Edgerunner option, you will once again move to the Templates for your Character's Role ... roll 1d10 for each STAT individually",
+
+"confidence": "high"
+
+},
+
+{
+
+"pack": "creation",
+
+"key": "stat_pool_complete_package",
+
+"value": 62,
+
+"page": 79,
+
+"quote": "Starting Character 62",
+
+"confidence": "high"
+
+},
+
+{
+
+"pack": "creation",
+
+"key": "skill_pool_streetrat",
+
+"value": null,
+
+"page": 87,
+
+"quote": "Skills are predetermined from the start with The Streetrat. As a Streetrat Character, we have already provided you with Skills and levels of Skills",
+
+"confidence": "high"
+
+},
+
+{
+
+"pack": "creation",
+
+"key": "skill_pool_edgerunner",
+
+"value": 86,
+
+"page": 89,
+
+"quote": "Edgerunners get 86 Skill points to be distributed between your Character's Skills to raise their totals up",
+
+"confidence": "high"
+
+},
+
+{
+
+"pack": "creation",
+
+"key": "skill_pool_complete_package",
+
+"value": 86,
+
+"page": 91,
+
+"quote": "Like Edgerunners, these Characters get 86 Skill points to raise up any Skills they want",
+
+"confidence": "high"
+
+},
+
+{
+
+"pack": "creation",
+
+"key": "skill_max_at_creation",
+
+"value": 6,
+
+"page": 91,
+
+"quote": "No Skill can be higher than 6",
+
+"confidence": "high",
+
+"note": "Applies to Skills (not STATs); same limit appears for Edgerunner method"
+
+},
+
+{
+
+"pack": "creation",
+
+"key": "stat_list",
+
+"value": ["INT", "REF", "DEX", "TECH", "COOL", "WILL", "LUCK", "MOVE", "BODY", "EMP"],
+
+"page": 74,
+
+"quote": "▶ int ▶ ReF ▶ Dex ▶ teCh ▶ Cool ▶ will ▶ luCk ▶ move ▶ boDy ▶ emP",
+
+"confidence": "high"
+
+},
+
+{
+
+"pack": "creation",
+
+"key": "roles",
+
+"value": ["Rockerboy", "Solo", "Netrunner", "Tech", "Medtech", "Media", "Lawman", "Exec", "Fixer", "Nomad"],
+
+"page": 87,
+
+"quote": "Rockerboy Solo Netrunner Tech Medtech ... Media Lawman Exec Fixer Nomad",
+
+"confidence": "high"
+
+},
+
+{
+
+"pack": "combat",
+
+"key": "range_dv",
+
+"value": {
+
+"Pistol": {"0-6": 13, "7-12": 15, "13-25": 20, "26-50": 25, "51-100": 30, "101-200": 30},
+
+"SMG": {"0-6": 15, "7-12": 13, "13-25": 15, "26-50": 20, "51-100": 25, "101-200": 25, "201-400": 30},
+
+"Shotgun (Slug)": {"0-6": 13, "7-12": 15, "13-25": 20, "26-50": 25, "51-100": 30, "101-200": 35},
+
+"Assault Rifle": {"0-6": 17, "7-12": 16, "13-25": 15, "26-50": 13, "51-100": 15, "101-200": 20, "201-400": 25, "401-800": 30},
+
+"Sniper Rifle": {"0-6": 30, "7-12": 25, "13-25": 25, "26-50": 20, "51-100": 15, "101-200": 16, "201-400": 17, "401-800": 20},
+
+"Bows & Crossbow": {"0-6": 15, "7-12": 13, "13-25": 15, "26-50": 17, "51-100": 20, "101-200": 22},
+
+"Grenade Launcher": {"0-6": 16, "7-12": 15, "13-25": 15, "26-50": 17, "51-100": 20, "101-200": 22, "201-400": 25},
+
+"Rocket Launcher": {"0-6": 17, "7-12": 16, "13-25": 15, "26-50": 15, "51-100": 20, "101-200": 20, "201-400": 25, "401-800": 30}
+
+},
+
+"page": 174,
+
+"quote": "Pistol 13 15 20 25 30 30 N/A N/A ... Assault Rifle 17 16 15 13 15 20 25 30",
+
+"confidence": "high"
+
+},
+
+{
+
+"pack": "combat",
+
+"key": "aimed_shot_penalties",
+
+"value": -8,
+
+"page": 171,
+
+"quote": "At a maximum of 1 ROF you can aim a single Ranged or Melee Attack by taking your entire Action and a -8 to your Check",
+
+"confidence": "high"
+
+},
+
+{
+
+"pack": "combat",
+
+"key": "aimed_shot_multipliers",
+
+"value": {"Head": "×2 damage through head armor"},
+
+"page": 171,
+
+"quote": "Head Multiply the damage that gets through your target's head armor by 2",
+
+"confidence": "high"
+
+},
+
+{
+
+"pack": "combat",
+
+"key": "armor_ablation",
+
+"value": "If any damage is taken after SP, armor SP on that location is reduced by 1 until repaired",
+
+"page": 187,
+
+"quote": "If you ended up taking any damage, your armor on that location is still ablated, reducing its SP by 1 point, until it is repaired",
+
+"confidence": "high"
+
+},
+
+{
+
+"pack": "combat",
+
+"key": "critical_injury_trigger",
+
+"value": "two or more damage dice show 6",
+
+"page": 188,
+
+"quote": "Whenever two or more dice rolled for damage from a Melee or Ranged Attack come up 6, you've inflicted a Critical Injury!",
+
+"confidence": "high"
+
+},
+
+{
+
+"pack": "combat",
+
+"key": "critical_injury_bonus",
+
+"value": 5,
+
+"page": 188,
+
+"quote": "All Critical Injuries cause a horrible Injury Effect and deal 5 Bonus Damage directly to the target's Hit Points when suffered",
+
+"confidence": "high"
+
+},
+
+{
+
+"pack": "combat",
+
+"key": "critical_injury_table_body",
+
+"value": {
+
+"2": "Dismembered Arm",
+
+"3": "Dismembered Hand",
+
+"4": "Collapsed Lung",
+
+"5": "Broken Ribs",
+
+"6": "Broken Arm"
+
+},
+
+"page": 188,
+
+"quote": "2 Dismembered Arm ... 3 Dismembered Hand ... 4 Collapsed Lung ... 5 Broken Ribs ... 6 Broken Arm",
+
+"confidence": "high"
+
+},
+
+{
+
+"pack": "combat",
+
+"key": "critical_injury_table_head",
+
+"value": {
+
+"2": "Lost Eye",
+
+"3": "Brain Injury",
+
+"4": "Damaged Eye",
+
+"5": "Concussion",
+
+"6": "Broken Jaw"
+
+},
+
+"page": 189,
+
+"quote": "2 Lost Eye ... 3 Brain Injury ... 4 Damaged Eye ... 5 Concussion ... 6 Broken Jaw",
+
+"confidence": "high"
+
+},
+
+{
+
+"pack": "combat",
+
+"key": "wound_states",
+
+"value": {
+
+"Lightly Wounded": "Less than Full HP",
+
+"Seriously Wounded": "Less than 1/2 HP (round up)",
+
+"Mortally Wounded": "Less than 1 HP",
+
+"Dead": "One failed Death Save"
+
+},
+
+"page": 187,
+
+"quote": "Lightly Wounded Less than Full HP ... Seriously Wounded Less than 1/2 HP (round up) ... Mortally Wounded Less than 1 HP ... Dead One failed Death Save",
+
+"confidence": "high"
+
+},
+
+{
+
+"pack": "combat",
+
+"key": "wound_penalties",
+
+"value": {
+
+"Lightly Wounded": "None",
+
+"Seriously Wounded": "-2 to all Actions",
+
+"Mortally Wounded": "-4 to all Actions, -6 to MOVE (Minimum 1), Death Save each Turn"
+
+},
+
+"page": 187,
+
+"quote": "Seriously Wounded ... -2 to all Actions ... Mortally Wounded ... -4 to all Actions -6 to MOVE (Minimum 1) Must make a Death Save at start of each one of their Turns",
+
+"confidence": "high"
+
+},
+
+{
+
+"pack": "combat",
+
+"key": "death_save_formula",
+
+"value": "Roll d10 under BODY (with accumulating +1 penalty each roll); fail = death; 10 always fails",
+
+"page": 189,
+
+"quote": "Roll a d10. If you roll under your BODY, you live ... If you roll a 10, you automatically fail your Death Save. Every time you roll a Death Save, your Death Save Penalty increases",
+
+"confidence": "high"
+
+},
+
+{
+
+"pack": "combat",
+
+"key": "initiative_formula",
+
+"value": "REF + 1d10",
+
+"page": 169,
+
+"quote": "Initiative = REF + 1d10",
+
+"confidence": "high"
+
+},
+
+{
+
+"pack": "combat",
+
+"key": "autofire_rules",
+
+"value": {
+
+"cost": "1 Action + 10 bullets",
+
+"skill": "Autofire (instead of weapon skill)",
+
+"damage": "2d6 × (margin of success, max = weapon Autofire rating)",
+
+"cannot_aimed": true
+
+},
+
+"page": 174,
+
+"quote": "When you use Autofire, it costs an Action and 10 bullets ... You use the Autofire Skill ... roll 2d6 for damage, and multiply it by the amount you beat the DV ... up to a maximum denoted by the weapon's Autofire",
+
+"confidence": "high"
+
+},
+
+{
+
+"pack": "combat",
+
+"key": "rof_rules",
+
+"value": "Rate of Fire = how many times the weapon can be fired/swung with a single Attack Action; 2 ROF attacks can be split across a Move Action",
+
+"page": 171,
+
+"quote": "Rate of Fire (ROF): How many times the weapon can be fired with a single Attack Action",
+
+"confidence": "high"
+
+},
+
+{
+
+"pack": "combat",
+
+"key": "melee_opposed_by",
+
+"value": "DEX + Evasion + 1d10",
+
+"page": 176,
+
+"quote": "They attack Rico Rico with their DEX + Melee Weapon Skill + 1d10, vs. Rico Rico's DEX + Evasion Skill + 1d10",
+
+"confidence": "high"
+
+},
+
+{
+
+"pack": "combat",
+
+"key": "ranged_defense",
+
+"value": "DV by range table, or (if REF ≥ 8) DEX + Evasion + 1d10",
+
+"page": 173,
+
+"quote": "Attacker's REF + Relevant Weapon Skill + 1d10 vs. Defender's DV Determined by Range to Target and Weapon or Defender's DEX + Evasion Skill + 1d10* *A Defender with a REF 8 or higher can choose to attempt to dodge",
+
+"confidence": "high"
+
+},
+
+{
+
+"pack": "weapons",
+
+"key": "grenade_launcher",
+
+"value": {
+
+"damage": "6d6",
+
+"rof": 1,
+
+"mag": 2,
+
+"skill": "Heavy Weapons",
+
+"conceal": "NO",
+
+"price": "500eb"
+
+},
+
+"page": 172,
+
+"quote": "Grenade Launcher ... Heavy Weapons 6d6 ... 2 ... 1 ... 2 ... NO ... 500eb",
+
+"confidence": "high"
+
+}
+
+],
+
+"not_found": [
+
+{
+
+"pack": "weapons",
+
+"key": "hand_grenade",
+
+"reason": "No standalone 'hand grenade' weapon entry with independent damage found; grenades appear as ammunition types for the Grenade Launcher (or special ammo effects). Separate thrown-grenade damage rule not located in extracted pages."
+
+},
+
+{
+
+"pack": "armor",
+
+"key": "bodyplate",
+
+"reason": "No armor type named 'bodyplate' appears in the armor table (pg. 185). Cannot equate to Metalgear without explicit text."
+
+},
+
+{
+
+"pack": "creation",
+
+"key": "methods",
+
+"reason": "Three methods fully described (Streetrat templates, Edgerunner individual rolls + 86 skill pts, Complete Package 62 STAT pts + 86 skill pts) but the key expects a single structured object; values already split into dedicated pool keys."
+
+},
+
+{
+
+"pack": "creation",
+
+"key": "skill_list",
+
+"reason": "Full Master Skill List with STAT bindings spans multiple pages; too large for single quote ≤200 chars. Partial Role skill tables exist but not the complete {key:stat} object."
+
+},
+
+{
+
+"pack": "creation",
+
+"key": "starting_eb",
+
+"reason": "Starting funds vary by Role package / method; no universal fixed eurobuck starting amount located."
+
+},
+
+{
+
+"pack": "creation",
+
+"key": "gear_budget",
+
+"reason": "No single fixed gear_budget value; gear comes from Role packages or purchased with starting funds."
+
+},
+
+{
+
+"pack": "creation",
+
+"key": "role_abilities",
+
+"reason": "Role Ability tables are multi-page and Role-specific; not extractable as one value."
+
+},
+
+{
+
+"pack": "cyberware",
+
+"key": "table",
+
+"reason": "Cyberware tables occupy many pages; not extracted in this pass."
+
+},
+
+{
+
+"pack": "cyberware",
+
+"key": "humanity_loss_rules",
+
+"reason": "Detailed Humanity Loss numbers and installation rules not extracted beyond basic EMP×10 formula."
+
+},
+
+{
+
+"pack": "netrunning",
+
+"key": "architectures",
+
+"reason": "NET Architecture construction rules not extracted."
+
+},
+
+{
+
+"pack": "netrunning",
+
+"key": "program_list",
+
+"reason": "Program list/table not extracted."
+
+},
+
+{
+
+"pack": "netrunning",
+
+"key": "interface_dv",
+
+"reason": "Interface DV values not extracted."
+
+},
+
+{
+
+"pack": "netrunning",
+
+"key": "black_ice",
+
+"reason": "Black ICE list/table not extracted."
+
+},
+
+{
+
+"pack": "gear",
+
+"key": "table",
+
+"reason": "Full gear tables extensive; not extracted."
+
+},
+
+{
+
+"pack": "gear",
+
+"key": "services",
+
+"reason": "Services pricing not extracted."
+
+}
+
+],
+
+"code_discrepancies": [
+
+{
+
+"symbol": "creation.HOUSE.stat_pool_edgerunner",
+
+"code": 60,
+
+"book": null,
+
+"page": 78,
+
+"verdict": "mismatch",
+
+"quote": "When using the Edgerunner option, you will once again move to the Templates for your Character's Role ... roll 1d10 for each STAT individually"
+
+},
+
+{
+
+"symbol": "creation.limits.stat_pool",
+
+"code": 60,
+
+"book": 62,
+
+"page": 79,
+
+"verdict": "mismatch",
+
+"quote": "Starting Character 62"
+
+},
+
+{
+
+"symbol": "creation.limits.skill_pool",
+
+"code": 30,
+
+"book": 86,
+
+"page": 89,
+
+"verdict": "mismatch",
+
+"quote": "Edgerunners get 86 Skill points to be distributed between your Character's Skills"
+
+},
+
+{
+
+"symbol": "creation.HOUSE.skill_pool_edgerunner",
+
+"code": 30,
+
+"book": 86,
+
+"page": 89,
+
+"verdict": "mismatch",
+
+"quote": "Edgerunners get 86 Skill points to be distributed between your Character's Skills"
+
+},
+
+{
+
+"symbol": "engine.WEAPONS.grenade.damage",
+
+"code": "6d6",
+
+"book": "6d6 (Grenade Launcher only; no separate hand-grenade entry confirmed)",
+
+"page": 172,
+
+"verdict": "mismatch",
+
+"quote": "Grenade Launcher ... 6d6",
+
+"note": "Code key 'grenade' cannot be equated to launcher without explicit hand-grenade rule"
+
+},
+
+{
+
+"symbol": "engine.ARMOR.bodyplate.sp",
+
+"code": 18,
+
+"book": null,
+
+"page": 185,
+
+"verdict": "mismatch",
+
+"quote": "Metalgear® 18",
+
+"note": "No armor named bodyplate; cannot map to Metalgear without direct text"
+
+},
+
+{
+
+"symbol": "engine.ARMOR.metalgear.sp",
+
+"code": 12,
+
+"book": 18,
+
+"page": 185,
+
+"verdict": "mismatch",
+
+"quote": "Metalgear® 18"
+
+},
+
+{
+
+"symbol": "engine.ARMOR.heavy_armorjack.sp",
+
+"code": 14,
+
+"book": 13,
+
+"page": 185,
+
+"verdict": "mismatch",
+
+"quote": "Heavy Armorjack 13"
+
+},
+
+{
+
+"symbol": "engine.DV.heroic",
+
+"code": 19,
+
+"book": 21,
+
+"page": 130,
+
+"verdict": "mismatch",
+
+"quote": "Heroic 21"
+
+},
+
+{
+
+"symbol": "engine.DV.incredible",
+
+"code": 21,
+
+"book": 24,
+
+"page": 130,
+
+"verdict": "mismatch",
+
+"quote": "Incredible 24"
+
+},
+
+{
+
+"symbol": "engine.DV.legendary",
+
+"code": 25,
+
+"book": 29,
+
+"page": 130,
+
+"verdict": "mismatch",
+
+"quote": "Legendary 29"
+
+},
+
+{
+
+"symbol": "engine.WEAPONS.smg.damage",
+
+"code": "3d6",
+
+"book": "2d6",
+
+"page": 172,
+
+"verdict": "mismatch",
+
+"quote": "SMG ... 2d6"
+
+}
+
+]
+
+}

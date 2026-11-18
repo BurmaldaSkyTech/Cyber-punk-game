@@ -34,9 +34,9 @@ def armor_table(base):
             cur["penalty_stats"] = pen.get("stats", [])
             if v.get("price") is not None:
                 cur["price"] = v["price"]
-        if "metalgear" in out and "bodyplate" in out:
-            out["bodyplate"].update(out["metalgear"])
-            out["bodyplate"]["book_alias"] = "metalgear"
+        if "bodyplate" in out:
+            out["bodyplate"]["house_item"] = True
+            out["bodyplate"]["note"] = "нет в книге (стр.185); домашний предмет"
     return out
 
 

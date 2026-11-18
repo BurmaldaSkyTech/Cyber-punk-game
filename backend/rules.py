@@ -134,3 +134,15 @@ def status():
                 "unverified": sum(1 for e in ents.values() if not e.get("verified")),
             }
     return {"book": BOOK, "packs": packs, "house_hits": house_hits()}
+ 
+def verified(pack, key):
+    e = entry(pack, key)
+    return bool(e and e.get("verified"))
+
+
+def value_or(pack, key, default=None):
+    """Возвращает книжное значение, включая ЯВНЫЙ null (в книге пула нет)."""
+    e = entry(pack, key)
+    if e and e.get("verified"):
+        return e.get("value")
+    return default 

@@ -5,7 +5,7 @@
 import random
 import json
 import inspect
-from backend import rules
+from backend import combat_rules, rules
 from pathlib import Path
 from .wounds import (apply_damage, death_save, get_wound_state,
                      get_wound_penalty, roll_critical_injury, determine_damage_type)
@@ -280,7 +280,7 @@ def ablate_armor(entity, penetrated):
     """Абляция брони при пробитии. Величина — из книги (combat.armor_ablation)."""
     if not penetrated:
         return None
-    step = int(_crule("armor_ablation") or 0)
+    step = combat_rules.ablation_step()
     if step <= 0:
         return None
     before = armor_sp(entity)
@@ -332,10 +332,9 @@ def resolve_check(state, actor, judge):
     stat = actor["stats"].get(stat_key, 2)
     sk_lvl = actor["skills"].get(skill, 0)
 
-    wound_state = get_wound_state(actor.get("hp", actor.get("max_hp", 10)),
-                                  actor.get("max_hp", 10))
-    wound_pen = rules.get_optional("combat", "wound_penalties")
-    mods = wound_pen.get(wound_state, 0) if isinstance(wound_pen, dict) else get_wound_penalty(wound_state)
+    wound_state = combat_rules.wound_state(actor.get("hp", actor.get("max_hp", 10)),
+                                          actor.get("max_hp", 10))
+    mods = combat_rules.wound_penalty(wound_state, stat_key)
     armor_rec = ARMOR.get(actor.get("armor") or "", {}) or {}
     armor_pen = int(armor_rec.get("penalty", 0) or 0)
     pen_stats = armor_rec.get("penalty_stats") or ["REF", "DEX", "MOVE"]
@@ -345,16 +344,24 @@ def resolve_check(state, actor, judge):
     location = (judge.get("location") or "auto")
     aimed_pen = 0
     if at in ("attack_ranged", "attack_melee"):
-        penalties = _crule("aimed_shot_penalties") or {}
-        aimed_pen = int(penalties.get(location, 0))
+        aimed_pen = combat_rules.aimed_penalty(location)
         mods += aimed_pen
 
+    if at == "attack_melee" and target is not None:
+        dv = combat_rules.melee_defense(target)
+    elif at == "attack_ranged":
+        rdv = combat_rules.range_dv(judge.get("weapon") or "heavy_pistol", 3)
+        if rdv:
+            dv = rdv
+        dodge = combat_rules.dodge_dv(target) if target is not None else None
+        if dodge is not None:
+            dv = max(dv, dodge)
     mech = skill_check(stat, sk_lvl, dv, mods)
     mech["armor_penalty"] = armor_pen if stat_key in pen_stats else 0
     mech.update({
         "actor": actor["name"], "action_type": at, "skill": skill,
         "stat_key": stat_key, "dv_key": dv_key,
-        "wound_state": wound_state, "wound_penalty": wound_pen if isinstance(wound_pen, dict) else mods,
+        "wound_state": wound_state, "wound_penalty": mods,
         "location": location, "aimed_penalty": aimed_pen,
     })
 
@@ -424,14 +431,12 @@ def resolve_check(state, actor, judge):
 
         dmg, faces = roll_dice(w.get("damage", "2d6"))
         sixes = sum(1 for f in faces if f == 6)
-        crit = sixes >= int(_crule("critical_injury_trigger") or 2)
-
-        mults = _crule("aimed_shot_multipliers") or {}
-        mult = float(mults.get(location, 1))
-        raw = int(round(dmg * mult))
+        crit = sixes >= combat_rules.crit_trigger()
+        mult = combat_rules.aimed_multiplier(location)
+        raw = dmg
 
         sp = armor_sp(target) if target else 0
-        net = max(0, raw - sp)
+        net = max(0, raw - sp) * mult
 
         martial_effect = None
         martial_effect_desc = ""
@@ -439,7 +444,7 @@ def resolve_check(state, actor, judge):
             net = martial.apply_move_bonus(move_key, net)
             martial_effect, martial_effect_desc = martial.get_move_effect(move_key)
 
-        bonus = int(_crule("critical_injury_bonus") or 0) if crit else 0
+        bonus = combat_rules.crit_bonus() if crit else 0
         total_damage = net + bonus
 
         mech.update({
@@ -468,7 +473,7 @@ def resolve_check(state, actor, judge):
                 elif injury and not crit:
                     mech["injury_suppressed"] = injury  # не подтверждено кубиками — не объявляем критом
                 if dr.get("death_save"):
-                    death_result = death_save(target)
+                    death_result = combat_rules.death_save(target)
                     target["dead"] = death_result["dead"]
                     mech["death_save"] = death_result
                     if death_result["dead"]:
@@ -555,7 +560,10 @@ def _npc_attack_roll(npc, weapon, wkey, target_player):
     skill = (npc.get("skills") or {}).get(weapon.get("skill", "handgun"), 3)
     roll, _ = roll_dice("1d10")
     total = roll + stat + skill
-    dv = 13
+    dv = combat_rules.range_dv(wkey, 3) or 13
+    dodge = combat_rules.dodge_dv(target_player)
+    if dodge is not None:
+        dv = max(dv, dodge)
     success = total >= dv
 
     res = {
@@ -565,7 +573,10 @@ def _npc_attack_roll(npc, weapon, wkey, target_player):
     }
     if success:
         dmg, _faces = roll_dice(weapon.get("damage", "2d6"))
-        sp = ARMOR.get(target_player.get("armor", "leathers"), {}).get("sp", 0)
+        sp = armor_sp(target_player)
+        abl = ablate_armor(target_player, dmg > sp)
+        if abl:
+            res["armor_ablation"] = abl
         net = max(0, dmg - sp)
         res.update({"damage": dmg, "armor_sp": sp, "net_damage": net})
         if net > 0:
